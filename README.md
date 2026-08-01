@@ -1,12 +1,17 @@
-# Duck Camera
+# web-cam
 
-Three.js で duck の 3D モデルをカメラ映像に重ね、撮影した画像を保存する最小構成の Web アプリです。
+Three.js の duck モデルをカメラ映像に重ねて撮影・保存する最小 Web アプリです。
 
-## ローカル実行
+## セットアップ
 
 ```bash
-npm install
-npm run dev
+make install
+```
+
+## ローカル起動
+
+```bash
+make dev
 ```
 
 ブラウザで `http://localhost:5173` を開きます。
@@ -14,20 +19,21 @@ npm run dev
 ## Docker 実行
 
 ```bash
-docker compose up --build app
+make docker
 ```
 
 ブラウザで `http://localhost:5173` を開きます。
 
 ## スマホ確認
 
-スマホのカメラ起動には HTTPS が必要です。Cloudflare Tunnel 付きで起動します。
+スマホのカメラ起動には HTTPS が必要です。Cloudflare Tunnel 経由で起動します。
 
 ```bash
-docker compose --profile tunnel up --build
+make docker-tunnel
 ```
 
 ログに出る `https://...trycloudflare.com` の URL をスマホで開きます。
+Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです。
 
 ## 操作
 
@@ -35,3 +41,13 @@ docker compose --profile tunnel up --build
 2. カメラ許可を出す
 3. `撮影` を押す
 4. `保存` を押して画像を保存する
+
+## よく使うコマンド
+
+```bash
+make check
+make build
+make audit
+make stop
+make clean
+```

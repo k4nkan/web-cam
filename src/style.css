@@ -13,42 +13,79 @@
   box-sizing: border-box;
 }
 
+html,
 body {
+  width: 100%;
   min-width: 320px;
-  min-height: 100vh;
+  height: 100%;
   margin: 0;
+  overflow: hidden;
   background: #101216;
 }
 
 button,
 .save-link {
-  min-height: 48px;
   border: 0;
-  border-radius: 8px;
-  padding: 0 18px;
+  border-radius: 999px;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  opacity: 0.55;
+}
+
+.app,
+.home-screen,
+.stage,
+.preview-screen {
+  width: 100%;
+  height: 100dvh;
 }
 
 .app {
+  position: relative;
+  overflow: hidden;
+  background: #101216;
+}
+
+.home-screen,
+.stage,
+.preview-screen {
+  display: none;
+}
+
+.state-home .home-screen,
+.state-camera .stage,
+.state-preview .preview-screen {
+  display: block;
+}
+
+.home-screen {
+  place-items: center;
+  background: #101216;
+}
+
+.state-home .home-screen {
   display: grid;
-  min-height: 100vh;
-  grid-template-rows: minmax(420px, 1fr) auto auto auto;
+}
+
+.start-button {
+  min-width: 180px;
+  min-height: 56px;
+  padding: 0 26px;
+  color: #ffffff;
+  background: #1e6bff;
+  box-shadow: 0 16px 40px rgba(30, 107, 255, 0.28);
 }
 
 .stage {
   position: relative;
-  min-height: 420px;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(28, 36, 48, 0.96), rgba(14, 17, 22, 0.96)),
-    #151922;
+  background: #101216;
 }
 
 #cameraVideo,
@@ -62,112 +99,81 @@ button:disabled {
 
 #cameraVideo {
   object-fit: cover;
-  opacity: 0;
-}
-
-.is-live #cameraVideo {
-  opacity: 1;
 }
 
 .three-layer {
   pointer-events: none;
 }
 
-.empty-state {
+.capture-button {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  gap: 10px;
-  padding: 24px;
-  text-align: center;
-  background: rgba(16, 18, 22, 0.4);
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.92);
+  border: 5px solid rgba(16, 18, 22, 0.22);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+  transform: translateX(-50%);
 }
 
-.empty-state h1 {
-  margin: 0;
-  font-size: clamp(2rem, 8vw, 4.5rem);
-  line-height: 1;
+.capture-button::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: inherit;
+  border: 2px solid rgba(16, 18, 22, 0.3);
 }
 
-.empty-state p {
-  max-width: 360px;
-  margin: 0 auto;
-  color: #c7cfda;
-  line-height: 1.7;
+.preview-screen {
+  position: relative;
+  background: #101216;
 }
 
-.controls {
+.preview-screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #101216;
+}
+
+.preview-actions {
+  position: absolute;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
   display: flex;
+  width: min(360px, calc(100% - 28px));
   gap: 10px;
-  align-items: center;
-  justify-content: center;
-  padding: 14px;
-  background: #f5f7fb;
-  border-top: 1px solid #d8dee8;
+  transform: translateX(-50%);
 }
 
-#startButton {
+.secondary-button,
+.save-link {
+  display: inline-grid;
+  flex: 1 1 0;
+  min-height: 52px;
+  place-items: center;
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+.secondary-button {
+  color: #121419;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.save-link {
   color: #ffffff;
   background: #1e6bff;
 }
 
-#captureButton {
-  color: #121419;
-  background: #ffd24a;
-}
-
-.save-link {
-  display: inline-grid;
-  place-items: center;
-  color: #ffffff;
-  text-decoration: none;
-  background: #1c8f54;
-}
-
-.result-panel {
-  padding: 14px;
-  background: #f5f7fb;
-}
-
-.result-panel img {
-  display: block;
-  width: min(100%, 720px);
-  max-height: 40vh;
-  margin: 0 auto;
-  border-radius: 8px;
-  object-fit: contain;
-  background: #111318;
-}
-
-.status-text {
-  min-height: 36px;
-  margin: 0;
-  padding: 8px 14px 14px;
-  color: #344052;
-  text-align: center;
-  background: #f5f7fb;
-}
-
-.is-hidden {
-  display: none;
-}
-
-@media (max-width: 640px) {
-  .app {
-    grid-template-rows: minmax(60vh, 1fr) auto auto auto;
-  }
-
-  .stage {
-    min-height: 60vh;
-  }
-
-  .controls {
-    flex-wrap: wrap;
-  }
-
-  button,
-  .save-link {
-    flex: 1 1 130px;
-  }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }

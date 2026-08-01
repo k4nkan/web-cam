@@ -1,18 +1,18 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import duckModelUrl from '../material/duck.fbx?url';
 import './style.css';
+
+const duckModelUrl = '/material/duck.fbx';
 
 const app = document.querySelector('.app');
 const stage = document.querySelector('.stage');
 const video = document.querySelector('#cameraVideo');
 const threeLayer = document.querySelector('#threeLayer');
-const emptyState = document.querySelector('#emptyState');
 const startButton = document.querySelector('#startButton');
 const captureButton = document.querySelector('#captureButton');
 const saveLink = document.querySelector('#saveLink');
-const resultPanel = document.querySelector('#resultPanel');
 const resultImage = document.querySelector('#resultImage');
+const retakeButton = document.querySelector('#retakeButton');
 const statusText = document.querySelector('#statusText');
 
 let renderer;
@@ -20,12 +20,14 @@ let scene;
 let camera;
 let duck;
 let animationFrameId;
+let lastFrameTime = 0;
 
 initThree();
 loadDuck();
 
 startButton.addEventListener('click', startCamera);
 captureButton.addEventListener('click', capturePhoto);
+retakeButton.addEventListener('click', retakePhoto);
 window.addEventListener('resize', resizeThree);
 
 function initThree() {
@@ -61,8 +63,11 @@ function loadDuck() {
   loader.load(
     duckModelUrl,
     (model) => {
-      duck = model;
-      fitModel(duck);
+      const duckGroup = new THREE.Group();
+      fitModel(model);
+      duckGroup.add(model);
+      duckGroup.rotation.set(0, -0.25, 0);
+      duck = duckGroup;
       scene.add(duck);
       setStatus('カメラを起動できます。');
     },
@@ -79,11 +84,10 @@ function fitModel(model) {
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const maxSize = Math.max(size.x, size.y, size.z) || 1;
-  const scale = 1.8 / maxSize;
+  const scale = 0.75 / maxSize;
 
   model.scale.setScalar(scale);
-  model.position.set(-center.x * scale, -center.y * scale - 0.45, -center.z * scale);
-  model.rotation.set(0, -0.25, 0);
+  model.position.set(-center.x * scale, -center.y * scale - 0.05, -center.z * scale);
 }
 
 async function startCamera() {
@@ -106,10 +110,9 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
-    app.classList.add('is-live');
-    emptyState.classList.add('is-hidden');
+    setMode('camera');
     captureButton.disabled = false;
-    startButton.textContent = 'カメラ起動済み';
+    window.requestAnimationFrame(resizeThree);
     setStatus('撮影できます。');
   } catch (error) {
     console.error(error);
@@ -140,10 +143,14 @@ function capturePhoto() {
 
   const imageUrl = canvas.toDataURL('image/jpeg', 0.92);
   resultImage.src = imageUrl;
-  resultPanel.classList.remove('is-hidden');
   saveLink.href = imageUrl;
-  saveLink.classList.remove('is-hidden');
+  setMode('preview');
   setStatus('撮影しました。保存ボタンから画像を保存できます。');
+}
+
+function retakePhoto() {
+  setMode('camera');
+  window.requestAnimationFrame(resizeThree);
 }
 
 function drawVideoCover(context, outputWidth, outputHeight) {
@@ -185,13 +192,27 @@ function resizeThree() {
   renderer.setSize(width, height, false);
 }
 
-function animate() {
+function animate(time = 0) {
+  const deltaSeconds = Math.min((time - lastFrameTime) / 1000, 0.04);
+  lastFrameTime = time;
+
+  if (duck) {
+    duck.rotation.x += deltaSeconds * 0.45;
+    duck.rotation.y += deltaSeconds * 0.75;
+    duck.rotation.z += deltaSeconds * 0.35;
+  }
+
   renderer.render(scene, camera);
   animationFrameId = window.requestAnimationFrame(animate);
 }
 
 function setStatus(message) {
   statusText.textContent = message;
+}
+
+function setMode(mode) {
+  app.classList.remove('state-home', 'state-camera', 'state-preview');
+  app.classList.add(`state-${mode}`);
 }
 
 window.addEventListener('beforeunload', () => {

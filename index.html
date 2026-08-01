@@ -6,27 +6,26 @@
     <title>Duck Camera</title>
   </head>
   <body>
-    <main class="app">
-      <section class="stage" aria-label="camera preview">
+    <main class="app state-home">
+      <section class="home-screen" aria-label="start camera">
+        <button id="startButton" class="start-button" type="button">カメラ起動</button>
+      </section>
+
+      <section class="stage" aria-label="camera">
         <video id="cameraVideo" autoplay muted playsinline></video>
         <div id="threeLayer" class="three-layer"></div>
-        <div id="emptyState" class="empty-state">
-          <h1>Duck Camera</h1>
-          <p>カメラを起動すると、定位置の duck と一緒に撮影できます。</p>
+        <button id="captureButton" class="capture-button" type="button" aria-label="撮影" disabled></button>
+      </section>
+
+      <section id="previewScreen" class="preview-screen" aria-label="preview">
+        <img id="resultImage" alt="撮影した写真" />
+        <div class="preview-actions">
+          <button id="retakeButton" class="secondary-button" type="button">再撮影</button>
+          <a id="saveLink" class="save-link" download="duck-camera.jpg">保存</a>
         </div>
       </section>
 
-      <section class="controls" aria-label="camera controls">
-        <button id="startButton" type="button">カメラ起動</button>
-        <button id="captureButton" type="button" disabled>撮影</button>
-        <a id="saveLink" class="save-link is-hidden" download="duck-camera.jpg">保存</a>
-      </section>
-
-      <section id="resultPanel" class="result-panel is-hidden" aria-label="captured photo">
-        <img id="resultImage" alt="撮影した写真" />
-      </section>
-
-      <p id="statusText" class="status-text" role="status"></p>
+      <p id="statusText" class="sr-only" role="status"></p>
     </main>
 
     <script type="module" src="/src/main.js"></script>
