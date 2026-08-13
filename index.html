@@ -2,19 +2,66 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,700,0,0"
+      rel="stylesheet"
+    />
     <title>Duck Camera</title>
   </head>
   <body>
     <main class="app state-home">
       <section class="home-screen" aria-label="start camera">
-        <button id="startButton" class="start-button" type="button">カメラ起動</button>
+        <button id="startButton" class="start-button" type="button">
+          <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
+          カメラ起動
+        </button>
       </section>
 
       <section class="stage" aria-label="camera">
         <video id="cameraVideo" autoplay muted playsinline></video>
         <div id="threeLayer" class="three-layer"></div>
-        <button id="captureButton" class="capture-button" type="button" aria-label="撮影" disabled></button>
+        <button id="switchCameraButton" class="camera-switch-button" type="button" aria-label="カメラ切替" disabled>
+          <span class="material-symbols-rounded" aria-hidden="true">flip_camera_ios</span>
+        </button>
+        <button id="captureButton" class="capture-button" type="button" aria-label="撮影" disabled>
+          <span class="material-symbols-rounded" aria-hidden="true">camera</span>
+        </button>
+        <div class="scale-control" aria-label="model size controls">
+          <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          <input
+            id="modelScaleRange"
+            class="model-scale-range"
+            type="range"
+            min="0.5"
+            max="1.8"
+            step="0.05"
+            value="1"
+            aria-label="モデルサイズ"
+          />
+          <span class="material-symbols-rounded" aria-hidden="true">remove</span>
+        </div>
+        <div class="model-controls" aria-label="model controls">
+          <div class="move-pad">
+            <button type="button" data-move="up" aria-label="上へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_up</span>
+            </button>
+            <button type="button" data-move="left" aria-label="左へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_left</span>
+            </button>
+            <button type="button" data-move="right" aria-label="右へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_right</span>
+            </button>
+            <button type="button" data-move="down" aria-label="下へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_down</span>
+            </button>
+          </div>
+        </div>
       </section>
 
       <section id="previewScreen" class="preview-screen" aria-label="preview">
