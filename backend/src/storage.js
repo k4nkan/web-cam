@@ -1,4 +1,8 @@
+import { readFile } from 'node:fs/promises';
 import { list, put } from '@vercel/blob';
+
+const defaultDuckPath = new URL('../assets/duck.fbx', import.meta.url);
+let defaultDuckUpload;
 
 function withToken(options) {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
@@ -19,22 +23,24 @@ export async function saveBlob(pathname, body, contentType) {
 
 export async function findModels() {
   const { blobs } = await list(withToken({ prefix: 'models/', limit: 1000 }));
+  const modelBlobs = await ensureDefaultDuck(blobs);
   const models = new Map();
 
-  for (const blob of blobs) {
-    const match = blob.pathname.match(/^models\/([^/]+)\/(model\.glb|preview\.[^/]+)$/);
+  for (const blob of modelBlobs) {
+    const match = blob.pathname.match(/^models\/([^/]+)\/(model\.(glb|fbx)|preview\.[^/]+)$/);
     if (!match) {
       continue;
     }
 
-    const [, id, filename] = match;
+    const [, id, filename, format] = match;
     const model = models.get(id) || {
       id,
-      name: `Tripo ${id.slice(0, 8)}`,
+      name: id === 'duck' ? 'duck' : `Tripo ${id.slice(0, 8)}`,
     };
 
-    if (filename === 'model.glb') {
+    if (filename.startsWith('model.')) {
       model.modelUrl = blob.url;
+      model.format = format;
     } else {
       model.previewUrl = blob.url;
     }
@@ -44,6 +50,25 @@ export async function findModels() {
   return [...models.values()]
     .filter((model) => model.modelUrl)
     .sort((a, b) => b.id.localeCompare(a.id));
+}
+
+async function ensureDefaultDuck(blobs) {
+  if (blobs.some((blob) => blob.pathname === 'models/duck/model.fbx')) {
+    return blobs;
+  }
+
+  defaultDuckUpload ||= (async () => {
+    try {
+      const body = await readFile(defaultDuckPath);
+      return await saveBlob('models/duck/model.fbx', body, 'application/octet-stream');
+    } catch (error) {
+      defaultDuckUpload = undefined;
+      throw error;
+    }
+  })();
+
+  const savedDuck = await defaultDuckUpload;
+  return [...blobs, { pathname: 'models/duck/model.fbx', url: savedDuck.url }];
 }
 
 export async function findModel(id) {

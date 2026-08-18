@@ -7,6 +7,7 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await page.goto('/');
 
   await expect(page.locator('.app')).toHaveClass(/state-home/);
+  await expect(page.locator('#modelPreview canvas')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('home.png') });
 
   await page.getByRole('button', { name: 'カメラ起動' }).click();

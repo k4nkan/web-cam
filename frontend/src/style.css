@@ -154,6 +154,18 @@ button:disabled {
   font-size: 12px;
 }
 
+.model-preview {
+  position: relative;
+  width: 100%;
+  height: 190px;
+  overflow: hidden;
+  border: 4px solid var(--line);
+  border-radius: 6px;
+  background: var(--stage-bg);
+  box-shadow: 0 5px 0 var(--shadow);
+  touch-action: none;
+}
+
 .stage {
   position: relative;
   overflow: hidden;
@@ -202,6 +214,10 @@ button:disabled {
 .three-layer {
   z-index: 1;
   pointer-events: none;
+}
+
+.model-preview .three-layer {
+  pointer-events: auto;
 }
 
 .camera-switch-button,

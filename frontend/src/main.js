@@ -9,6 +9,7 @@ const generationPollInterval = 2000;
 
 const app = document.querySelector('.app');
 const stage = document.querySelector('.stage');
+const modelPreview = document.querySelector('#modelPreview');
 const video = document.querySelector('#cameraVideo');
 const threeLayer = document.querySelector('#threeLayer');
 const startButton = document.querySelector('#startButton');
@@ -78,6 +79,7 @@ retakeButton.addEventListener('click', retakePhoto);
 generateCapturedButton.addEventListener('click', generateFromCapturedImage);
 saveLink.addEventListener('click', saveCapturedPhoto);
 stage.addEventListener('pointerdown', startModelDrag);
+modelPreview.addEventListener('pointerdown', startModelDrag);
 window.addEventListener('pointermove', dragModel);
 window.addEventListener('pointerup', stopModelDrag);
 window.addEventListener('pointercancel', stopModelDrag);
@@ -99,6 +101,7 @@ function initThree() {
   renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   threeLayer.appendChild(renderer.domElement);
+  modelPreview.appendChild(threeLayer);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x5f6f89, 2.2));
 
@@ -125,14 +128,19 @@ async function loadModelCatalog() {
 }
 
 function addGeneratedModelOption(model) {
+  const wasSelected = modelSelect.value === model.id;
   findModelOption(model.id)?.remove();
 
   const option = document.createElement('option');
   option.value = model.id;
   option.textContent = model.name;
   option.dataset.url = model.modelUrl;
-  option.dataset.format = 'glb';
+  option.dataset.format = model.format || 'glb';
   modelSelect.appendChild(option);
+
+  if (wasSelected) {
+    loadModelOption(model.id);
+  }
 }
 
 function addPendingModelOption(task) {
@@ -314,7 +322,7 @@ function capturePhoto() {
 
   renderer.render(scene, camera);
 
-  const rect = stage.getBoundingClientRect();
+  const rect = (threeLayer.parentElement || stage).getBoundingClientRect();
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const outputWidth = Math.round(rect.width * pixelRatio);
   const outputHeight = Math.round(rect.height * pixelRatio);
@@ -618,7 +626,7 @@ function startModelDrag(event) {
   dragState.pointerId = event.pointerId;
   dragState.lastX = event.clientX;
   dragState.lastY = event.clientY;
-  stage.setPointerCapture(event.pointerId);
+  event.currentTarget.setPointerCapture(event.pointerId);
 }
 
 function dragModel(event) {
@@ -679,8 +687,15 @@ function setStatus(message) {
 }
 
 function setMode(mode) {
+  if (mode === 'home') {
+    modelPreview.appendChild(threeLayer);
+  } else {
+    stage.appendChild(threeLayer);
+  }
+
   app.classList.remove('state-home', 'state-camera', 'state-preview');
   app.classList.add(`state-${mode}`);
+  window.requestAnimationFrame(resizeThree);
 }
 
 window.addEventListener('beforeunload', () => {
