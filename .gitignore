@@ -1,5 +1,7 @@
 node_modules
 dist
+frontend/dist
+backend/data
 .DS_Store
 npm-debug.log
 test-results
