@@ -1,11 +1,14 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev backend backend-install build preview docker docker-tunnel docker-config docker-tunnel-config audit check stop clean
+PRODUCTION_API_URL ?= https://web-cam-blue.vercel.app
+
+.PHONY: help install dev dev-tunnel-prod backend backend-install build preview docker docker-tunnel docker-config docker-tunnel-config audit check stop clean
 
 help:
 	@echo "Usage:"
 	@echo "  make install              Install frontend/backend dependencies"
 	@echo "  make dev                  Start the frontend Vite dev server"
+	@echo "  make dev-tunnel-prod     Start local frontend with production API and Tunnel"
 	@echo "  make backend              Start the local backend API"
 	@echo "  make build                Build frontend production assets"
 	@echo "  make preview              Preview built frontend assets"
@@ -24,6 +27,12 @@ install:
 
 dev:
 	npm --prefix frontend run dev -- --host 0.0.0.0
+
+dev-tunnel-prod:
+	@trap 'kill $$frontend_pid 2>/dev/null || true' EXIT INT TERM; \
+	VITE_API_PROXY_TARGET="$(PRODUCTION_API_URL)" npm --prefix frontend run dev -- --host 0.0.0.0 & \
+	frontend_pid=$$!; \
+	cloudflared tunnel --no-autoupdate --url http://127.0.0.1:5173
 
 backend:
 	npm --prefix backend run dev

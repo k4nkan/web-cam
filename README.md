@@ -26,7 +26,8 @@ make dev
 make backend
 ```
 
-`backend/.env` に `TRIPO_API_KEY` と `BLOB_READ_WRITE_TOKEN` を設定してください。
+ローカルバックエンドも使う場合は、`backend/.env` に `TRIPO_API_KEY` と
+`BLOB_READ_WRITE_TOKEN` を設定してください。
 
 ## Docker 実行
 
@@ -39,6 +40,15 @@ make docker
 ## スマホ確認
 
 スマホのカメラ起動には HTTPS が必要です。Cloudflare Tunnel 経由で起動します。
+
+フロントだけローカルで変更し、API・Tripo・Blobは本番Vercelを使う場合は、次を実行します。
+
+```bash
+make dev-tunnel-prod
+```
+
+このモードではローカルバックエンドを起動しないため、ローカルのBlobトークンは不要です。
+Viteの`/api` proxyが本番バックエンドへ接続します。
 
 ```bash
 make docker-tunnel
