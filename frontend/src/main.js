@@ -128,8 +128,9 @@ async function loadModelCatalog() {
 }
 
 function addGeneratedModelOption(model) {
-  const wasSelected = modelSelect.value === model.id;
+  const wasSelected = modelSelect.value === model.id || !modelSelect.value;
   findModelOption(model.id)?.remove();
+  findModelOption('')?.remove();
 
   const option = document.createElement('option');
   option.value = model.id;
@@ -139,6 +140,7 @@ function addGeneratedModelOption(model) {
   modelSelect.appendChild(option);
 
   if (wasSelected) {
+    modelSelect.value = model.id;
     loadModelOption(model.id);
   }
 }
@@ -195,6 +197,10 @@ function updatePendingModelTask(task) {
 }
 
 function loadModelOption(value) {
+  if (!value) {
+    return;
+  }
+
   const option = modelSelect.querySelector(`option[value="${CSS.escape(value)}"]`);
   if (!option) {
     return;

@@ -4,25 +4,20 @@ import { list, put } from '@vercel/blob';
 const defaultDuckPath = new URL('../assets/duck.fbx', import.meta.url);
 let defaultDuckUpload;
 
-function withToken(options) {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  return token ? { ...options, token } : options;
-}
-
 export async function saveBlob(pathname, body, contentType) {
   return put(
     pathname,
     body,
-    withToken({
+    {
       access: 'public',
       addRandomSuffix: false,
       contentType,
-    }),
+    },
   );
 }
 
 export async function findModels() {
-  const { blobs } = await list(withToken({ prefix: 'models/', limit: 1000 }));
+  const { blobs } = await list({ prefix: 'models/', limit: 1000 });
   const modelBlobs = await ensureDefaultDuck(blobs);
   const models = new Map();
 

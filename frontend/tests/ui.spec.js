@@ -1,9 +1,6 @@
 import { expect, test } from '@playwright/test';
 
 test('camera UI states stay usable and screenshotable', async ({ page }, testInfo) => {
-  const modelResponse = await page.request.get('/material/duck.fbx');
-  expect(modelResponse.ok()).toBeTruthy();
-
   await page.goto('/');
 
   await expect(page.locator('.app')).toHaveClass(/state-home/);

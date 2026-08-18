@@ -11,3 +11,4 @@ backend/data
 npm-debug.log
 test-results
 playwright-report
+.dev.pids

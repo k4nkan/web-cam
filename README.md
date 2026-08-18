@@ -14,44 +14,25 @@ make install
 
 ## ローカル起動
 
+ローカルfrontend/backendを起動し、Blobだけ本番Vercelへ接続する標準手順は次です。
+
+```bash
+make dev-tunnel
+```
+
+このコマンドはDevelopment環境のVercel環境変数を取得し、ローカルbackendへ渡します。
+`backend/.env`には`TRIPO_API_KEY`だけを設定します。
+
+Tunnelなしでローカル確認する場合は次を使います。
+
 ```bash
 make dev
 ```
 
-ブラウザで `http://localhost:5173` を開きます。
-
-バックエンド API は別ターミナルで起動します。
+停止は別ターミナルから実行できます。
 
 ```bash
-make backend
-```
-
-ローカルバックエンドも使う場合は、`backend/.env` に `TRIPO_API_KEY` と
-`BLOB_READ_WRITE_TOKEN` を設定してください。
-
-## Docker 実行
-
-```bash
-make docker
-```
-
-ブラウザで `http://localhost:5173` を開きます。
-
-## スマホ確認
-
-スマホのカメラ起動には HTTPS が必要です。Cloudflare Tunnel 経由で起動します。
-
-フロントだけローカルで変更し、API・Tripo・Blobは本番Vercelを使う場合は、次を実行します。
-
-```bash
-make dev-tunnel-prod
-```
-
-このモードではローカルバックエンドを起動しないため、ローカルのBlobトークンは不要です。
-Viteの`/api` proxyが本番バックエンドへ接続します。
-
-```bash
-make docker-tunnel
+make stop
 ```
 
 ログに出る `https://...trycloudflare.com` の URL をスマホで開きます。
@@ -77,7 +58,7 @@ Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです�
 
 Deploy後、同じプロジェクトの`Storage`→`Create Database`→`Blob`からPublic Blob Storeを作成します。
 新しいBlob StoreではOIDC接続が使われ、`BLOB_STORE_ID`などが自動追加されます。
-古いトークン方式を使う場合は`BLOB_READ_WRITE_TOKEN`を設定してください。
+ローカル開発では`make dev`または`make dev-tunnel`がDevelopment環境のOIDC変数を取得します。
 
 生成済みGLB・プレビュー画像はBlobのURLで配信されます。VercelプロジェクトのURLとBlob配信URLは別です。
 
@@ -86,11 +67,8 @@ Deploy後、同じプロジェクトの`Storage`→`Create Database`→`Blob`か
 Vercelの`Settings`→`Environment Variables`で、少なくともProductionに以下を設定します。
 
 - `TRIPO_API_KEY`：TripoのAPIキー
-- `BLOB_READ_WRITE_TOKEN`：任意。旧トークン方式で使う場合のみ設定
 - `TRIPO_MODEL`：任意。未設定時はバックエンドの既定値を使う
 - `TRIPO_API_BASE_URL`：任意。未設定時はTripo v3 APIを使う
-
-`FRONTEND_ORIGIN`は、同一ドメインのServices経由では通常不要です。
 
 ### CLIでの確認・デプロイ
 
@@ -125,9 +103,8 @@ curl -i https://<project-domain>/api/models
 ## よく使うコマンド
 
 ```bash
-make check
-make build
-make audit
+make install
+make dev
+make dev-tunnel
 make stop
-make clean
 ```
