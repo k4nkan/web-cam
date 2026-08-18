@@ -1,26 +1,24 @@
 import { list, put } from '@vercel/blob';
 
-function getToken() {
+function withToken(options) {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    const error = new Error('BLOB_READ_WRITE_TOKEN が設定されていません。');
-    error.status = 500;
-    throw error;
-  }
-  return token;
+  return token ? { ...options, token } : options;
 }
 
 export async function saveBlob(pathname, body, contentType) {
-  return put(pathname, body, {
-    access: 'public',
-    addRandomSuffix: false,
-    contentType,
-    token: getToken(),
-  });
+  return put(
+    pathname,
+    body,
+    withToken({
+      access: 'public',
+      addRandomSuffix: false,
+      contentType,
+    }),
+  );
 }
 
 export async function findModels() {
-  const { blobs } = await list({ prefix: 'models/', limit: 1000, token: getToken() });
+  const { blobs } = await list(withToken({ prefix: 'models/', limit: 1000 }));
   const models = new Map();
 
   for (const blob of blobs) {

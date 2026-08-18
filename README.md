@@ -66,7 +66,8 @@ Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです�
 ### Blobの作成
 
 Deploy後、同じプロジェクトの`Storage`→`Create Database`→`Blob`からPublic Blob Storeを作成します。
-プロジェクトに接続して作成すると、`BLOB_READ_WRITE_TOKEN`が環境変数へ自動追加されます。
+新しいBlob StoreではOIDC接続が使われ、`BLOB_STORE_ID`などが自動追加されます。
+古いトークン方式を使う場合は`BLOB_READ_WRITE_TOKEN`を設定してください。
 
 生成済みGLB・プレビュー画像はBlobのURLで配信されます。VercelプロジェクトのURLとBlob配信URLは別です。
 
@@ -75,7 +76,7 @@ Deploy後、同じプロジェクトの`Storage`→`Create Database`→`Blob`か
 Vercelの`Settings`→`Environment Variables`で、少なくともProductionに以下を設定します。
 
 - `TRIPO_API_KEY`：TripoのAPIキー
-- `BLOB_READ_WRITE_TOKEN`：Blob Store作成時に自動追加された値
+- `BLOB_READ_WRITE_TOKEN`：任意。旧トークン方式で使う場合のみ設定
 - `TRIPO_MODEL`：任意。未設定時はバックエンドの既定値を使う
 - `TRIPO_API_BASE_URL`：任意。未設定時はTripo v3 APIを使う
 
