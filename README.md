@@ -49,30 +49,60 @@ Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです�
 
 ## Vercel デプロイ
 
-Vercel Servicesを使い、1つのVercelプロジェクト内でfrontendとbackendを動かします。
-リポジトリのルートをRoot Directoryにし、Frameworkを`Services`に設定してください。
-ルートの`vercel.json`が`/api/*`をbackend、それ以外をfrontendへルーティングします。
+このリポジトリは、Vercel Servicesで1つのプロジェクトにまとめてデプロイします。
+ルートの`vercel.json`が、`/api/*`をbackend、それ以外をfrontendへルーティングします。
 
-Backendで使う環境変数を同じVercelプロジェクトに設定します。
+### 新規プロジェクトの作成
 
-- `TRIPO_API_KEY`
-- `BLOB_READ_WRITE_TOKEN`
-- `FRONTEND_ORIGIN`（Servicesでは通常不要）
+1. Vercelの`New Project`で`k4nkan/web-cam`をImportする
+2. Root Directoryはリポジトリのルート（`.`）にする
+3. Framework Presetを`Services`にする
+4. Build Command、Output Directory、Install Commandは上書きしない
+5. Production Branchを`main`にしてDeployする
 
-Blob StoreはVercel DashboardのStorageから同じプロジェクト内に作成します。
-保存後に返るGLBや画像のURLは、Vercel本体とは別のBlob配信URLになります。
+`Services`がFramework Presetに表示されない場合は、Servicesの利用権限がアカウントにないか、
+プロジェクト側がServicesになっていません。`vercel.json`を書くだけではServicesとして動きません。
+
+### Blobの作成
+
+Deploy後、同じプロジェクトの`Storage`→`Create Database`→`Blob`からPublic Blob Storeを作成します。
+プロジェクトに接続して作成すると、`BLOB_READ_WRITE_TOKEN`が環境変数へ自動追加されます。
+
+生成済みGLB・プレビュー画像はBlobのURLで配信されます。VercelプロジェクトのURLとBlob配信URLは別です。
+
+### 環境変数
+
+Vercelの`Settings`→`Environment Variables`で、少なくともProductionに以下を設定します。
+
+- `TRIPO_API_KEY`：TripoのAPIキー
+- `BLOB_READ_WRITE_TOKEN`：Blob Store作成時に自動追加された値
+- `TRIPO_MODEL`：任意。未設定時はバックエンドの既定値を使う
+- `TRIPO_API_BASE_URL`：任意。未設定時はTripo v3 APIを使う
+
+`FRONTEND_ORIGIN`は、同一ドメインのServices経由では通常不要です。
+
+### CLIでの確認・デプロイ
+
+ローカルのVercel CLIは最新にしてから、リポジトリルートで実行します。
 
 ```bash
+npm i -g vercel@latest
 vercel link
-vercel blob create-store web-cam-models --access public
-vercel --prod
+vercel build --prod
+vercel deploy --prebuilt --prod
 ```
 
+Git連携済みなら、`main`へpushして自動デプロイする運用で問題ありません。
+`backend/`へ移動して別プロジェクトとして`vercel`を実行しないでください。
+
+### デプロイ後の確認
+
 ```bash
-cd backend
-vercel link
-vercel blob create-store web-cam-models --access public
+curl -i https://<project-domain>/api/health
+curl -i https://<project-domain>/api/models
 ```
+
+`/api/health`が`{"ok":true}`を返し、`/api/models`がBlob未設定なら明確な環境変数エラーを返すことを確認します。
 
 ## 操作
 

@@ -7,9 +7,10 @@
     },
     "backend": {
       "root": "backend",
-      "entrypoint": "api",
+      "framework": "node",
+      "entrypoint": "api/index.js",
       "functions": {
-        "api/*.js": {
+        "api/index.js": {
           "maxDuration": 300
         }
       }
