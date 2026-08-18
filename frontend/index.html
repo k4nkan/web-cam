@@ -6,6 +6,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="/src/style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,28 +17,39 @@
     <title>3D-cam</title>
   </head>
   <body>
-    <main class="app state-home">
+    <main class="app state-loading">
+      <section id="loadingScreen" class="loading-screen" aria-label="読み込み中" aria-live="polite">
+        <div class="loading-ducks" aria-hidden="true">
+          <img class="loading-duck" src="/images/tobisuke.webp" alt="" />
+          <img class="loading-duck" src="/images/tobisuke.webp" alt="" />
+          <img class="loading-duck" src="/images/tobisuke.webp" alt="" />
+          <img class="loading-duck" src="/images/tobisuke.webp" alt="" />
+        </div>
+      </section>
+
       <section class="home-screen" aria-label="start camera">
         <div class="model-picker">
-          <label for="modelSelect">モデル</label>
-          <select id="modelSelect">
+          <label for="modelSelect">貸し出し備品一覧</label>
+          <select id="modelSelect" class="sr-only">
             <option value="" selected disabled>モデルを読み込み中...</option>
           </select>
-          <div id="modelPreview" class="model-preview" aria-label="モデルプレビュー"></div>
-          <input id="modelImageInput" type="file" accept="image/jpeg,image/png,image/webp" />
-          <button id="generateUploadButton" class="secondary-button" type="button">
-            画像からモデル生成
+          <div id="modelGallery" class="model-gallery" aria-label="モデル一覧"></div>
+          <input id="modelImageInput" class="sr-only" type="file" accept="image/*" />
+        </div>
+        <div class="camera-start-panel">
+          <button id="startButton" class="start-button" type="button" disabled>
+            <span id="startButtonIcon" class="material-symbols-rounded" aria-hidden="true" hidden>photo_camera</span>
+            <span id="startButtonLabel" aria-live="polite">モデル取得中...</span>
           </button>
         </div>
-        <button id="startButton" class="start-button" type="button">
-          <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
-          カメラ起動
-        </button>
       </section>
 
       <section class="stage" aria-label="camera">
         <video id="cameraVideo" autoplay muted playsinline></video>
         <div id="threeLayer" class="three-layer"></div>
+        <button id="homeFromCameraButton" class="home-button" type="button" aria-label="トップへ戻る">
+          <span class="material-symbols-rounded" aria-hidden="true">home</span>
+        </button>
         <button id="switchCameraButton" class="camera-switch-button" type="button" aria-label="カメラ切替" disabled>
           <span class="material-symbols-rounded" aria-hidden="true">flip_camera_ios</span>
         </button>
@@ -77,9 +90,11 @@
 
       <section id="previewScreen" class="preview-screen" aria-label="preview">
         <img id="resultImage" alt="撮影した写真" />
+        <button id="homeFromPreviewButton" class="home-button" type="button" aria-label="トップへ戻る">
+          <span class="material-symbols-rounded" aria-hidden="true">home</span>
+        </button>
         <div class="preview-actions">
           <button id="retakeButton" class="secondary-button" type="button">再撮影</button>
-          <button id="generateCapturedButton" class="secondary-button" type="button">この画像から生成</button>
           <a id="saveLink" class="save-link" download="duck-camera.jpg">保存</a>
         </div>
       </section>

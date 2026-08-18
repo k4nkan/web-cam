@@ -37,5 +37,14 @@ export default defineConfig({
         isMobile: true,
       },
     },
+    {
+      name: 'mobile-landscape',
+      use: {
+        viewport: { width: 844, height: 390 },
+        deviceScaleFactor: 2,
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
   ],
 });

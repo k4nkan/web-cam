@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import './style.css';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const pendingTasksStorageKey = 'web-cam.pending-model-tasks';
@@ -9,13 +8,12 @@ const generationPollInterval = 2000;
 
 const app = document.querySelector('.app');
 const stage = document.querySelector('.stage');
-const modelPreview = document.querySelector('#modelPreview');
 const video = document.querySelector('#cameraVideo');
 const threeLayer = document.querySelector('#threeLayer');
 const startButton = document.querySelector('#startButton');
 const modelSelect = document.querySelector('#modelSelect');
+const modelGallery = document.querySelector('#modelGallery');
 const modelImageInput = document.querySelector('#modelImageInput');
-const generateUploadButton = document.querySelector('#generateUploadButton');
 const captureButton = document.querySelector('#captureButton');
 const switchCameraButton = document.querySelector('#switchCameraButton');
 const modelScaleRange = document.querySelector('#modelScaleRange');
@@ -23,22 +21,25 @@ const moveButtons = document.querySelectorAll('[data-move]');
 const saveLink = document.querySelector('#saveLink');
 const resultImage = document.querySelector('#resultImage');
 const retakeButton = document.querySelector('#retakeButton');
-const generateCapturedButton = document.querySelector('#generateCapturedButton');
+const homeFromCameraButton = document.querySelector('#homeFromCameraButton');
+const homeFromPreviewButton = document.querySelector('#homeFromPreviewButton');
 const statusText = document.querySelector('#statusText');
+const startButtonIcon = document.querySelector('#startButtonIcon');
+const startButtonLabel = document.querySelector('#startButtonLabel');
 
 const modelState = {
   x: 0,
-  y: 0,
+  y: 0.18,
   scale: 1,
   rotationX: 0,
   rotationY: 0,
 };
 
 const modelMoveSteps = {
-  up: [0, 0.12],
-  down: [0, -0.12],
-  left: [-0.12, 0],
-  right: [0.12, 0],
+  up: [0, 0.05],
+  down: [0, -0.05],
+  left: [-0.05, 0],
+  right: [0.05, 0],
 };
 
 const dragState = {
@@ -57,17 +58,16 @@ let currentFacingMode = 'environment';
 let animationFrameId;
 let capturedImageUrl;
 let capturedImageBlob;
-let capturedImageDataUrl;
 let lastMoveButtonTouchTime = 0;
+let selectedModelReady = false;
+let initialLoading = true;
 
-initThree();
-loadModelCatalog();
-loadPendingModelTasks();
-loadModelOption(modelSelect.value);
+boot();
 
 startButton.addEventListener('click', startCamera);
-modelSelect.addEventListener('change', () => loadModelOption(modelSelect.value));
-generateUploadButton.addEventListener('click', generateFromUpload);
+modelSelect.addEventListener('change', () => selectModel(modelSelect.value));
+modelGallery.addEventListener('click', selectGalleryModel);
+modelImageInput.addEventListener('change', generateFromUpload);
 captureButton.addEventListener('click', capturePhoto);
 switchCameraButton.addEventListener('click', switchCamera);
 modelScaleRange.addEventListener('input', updateModelScale);
@@ -76,15 +76,22 @@ moveButtons.forEach((button) => {
   button.addEventListener('keydown', handleMoveButtonInput);
 });
 retakeButton.addEventListener('click', retakePhoto);
-generateCapturedButton.addEventListener('click', generateFromCapturedImage);
+homeFromCameraButton.addEventListener('click', goHome);
+homeFromPreviewButton.addEventListener('click', goHome);
 saveLink.addEventListener('click', saveCapturedPhoto);
 stage.addEventListener('pointerdown', startModelDrag);
-modelPreview.addEventListener('pointerdown', startModelDrag);
 window.addEventListener('pointermove', dragModel);
 window.addEventListener('pointerup', stopModelDrag);
 window.addEventListener('pointercancel', stopModelDrag);
 document.addEventListener('touchend', preventMoveButtonDoubleTapZoom, { passive: false });
 window.addEventListener('resize', resizeThree);
+
+function boot() {
+  initThree();
+  loadPendingModelTasks();
+  ensureAddModelCard();
+  loadModelCatalog();
+}
 
 function initThree() {
   scene = new THREE.Scene();
@@ -101,7 +108,6 @@ function initThree() {
   renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   threeLayer.appendChild(renderer.domElement);
-  modelPreview.appendChild(threeLayer);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x5f6f89, 2.2));
 
@@ -114,22 +120,34 @@ function initThree() {
 }
 
 async function loadModelCatalog() {
+  setModelStatus('モデルを取得中...');
+
   try {
     const response = await fetch(apiUrl('/api/models'));
     if (!response.ok) {
-      return;
+      throw new Error('モデル一覧を取得できません。');
     }
 
     const payload = await response.json();
+    if (!payload.models?.length) {
+      setModelStatus('モデルがありません。＋から追加できます。');
+      finishInitialLoading();
+      return;
+    }
+
     payload.models.forEach(addGeneratedModelOption);
   } catch (error) {
     console.info('生成済みモデル一覧はまだ利用できません。', error);
+    startButton.disabled = true;
+    setModelStatus('モデルを取得できません。再読み込みしてください。');
+    finishInitialLoading();
   }
 }
 
 function addGeneratedModelOption(model) {
   const wasSelected = modelSelect.value === model.id || !modelSelect.value;
   findModelOption(model.id)?.remove();
+  findModelCard(model.id)?.remove();
   findModelOption('')?.remove();
 
   const option = document.createElement('option');
@@ -138,15 +156,17 @@ function addGeneratedModelOption(model) {
   option.dataset.url = model.modelUrl;
   option.dataset.format = model.format || 'glb';
   modelSelect.appendChild(option);
+  modelGallery.appendChild(createModelCard(model));
+  ensureAddModelCard();
 
   if (wasSelected) {
-    modelSelect.value = model.id;
-    loadModelOption(model.id);
+    selectModel(model.id);
   }
 }
 
 function addPendingModelOption(task) {
   findModelOption(task.taskId)?.remove();
+  findModelCard(task.taskId)?.remove();
 
   const option = document.createElement('option');
   option.value = task.taskId;
@@ -154,10 +174,180 @@ function addPendingModelOption(task) {
   option.disabled = true;
   option.dataset.pending = 'true';
   modelSelect.appendChild(option);
+  modelGallery.appendChild(createModelCard({
+    id: task.taskId,
+    name: task.name || '新しいモデル',
+    pending: true,
+    progress: task.progress || 0,
+  }));
+  ensureAddModelCard();
 }
 
 function findModelOption(value) {
   return [...modelSelect.options].find((option) => option.value === value);
+}
+
+function findModelCard(value) {
+  return [...modelGallery.querySelectorAll('[data-model-id]')].find(
+    (card) => card.dataset.modelId === value,
+  );
+}
+
+function createModelCard(model) {
+  const card = document.createElement('button');
+  card.className = 'model-card';
+  card.type = 'button';
+  card.dataset.modelId = model.id;
+  card.setAttribute('aria-label', model.name);
+  card.setAttribute('aria-pressed', String(model.id === modelSelect.value));
+
+  if (model.pending) {
+    card.classList.add('is-pending');
+    card.disabled = true;
+  }
+
+  const imageContainer = document.createElement('span');
+  imageContainer.className = 'model-card-preview';
+
+  if (model.previewUrl) {
+    const image = document.createElement('img');
+    image.src = model.previewUrl;
+    image.alt = `${model.name}のプレビュー`;
+    image.loading = 'lazy';
+    imageContainer.appendChild(image);
+  } else if (model.modelUrl) {
+    mountModelThumbnail(model, imageContainer);
+  } else {
+    imageContainer.textContent = '3D';
+  }
+
+  card.appendChild(imageContainer);
+
+  if (model.pending) {
+    const progress = clamp(Number(model.progress) || 0, 0, 100);
+    const progressTrack = document.createElement('span');
+    progressTrack.className = 'model-card-progress';
+    progressTrack.setAttribute('aria-hidden', 'true');
+
+    const progressFill = document.createElement('span');
+    progressFill.className = 'model-card-progress-fill';
+    progressFill.style.width = `${progress}%`;
+    progressTrack.appendChild(progressFill);
+
+    const status = document.createElement('span');
+    status.className = 'model-card-status';
+    status.textContent = `作成中... ${progress}%`;
+    card.append(progressTrack, status);
+    card.setAttribute('aria-label', `モデル作成中 ${progress}%`);
+  }
+
+  return card;
+}
+
+function createAddModelCard() {
+  const card = document.createElement('button');
+  card.className = 'model-card add-model-card';
+  card.type = 'button';
+  card.dataset.action = 'add-model';
+  card.setAttribute('aria-label', 'モデルを追加');
+
+  const icon = document.createElement('span');
+  icon.className = 'material-symbols-rounded';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = 'add';
+  card.appendChild(icon);
+  return card;
+}
+
+function ensureAddModelCard() {
+  modelGallery.querySelector('[data-action="add-model"]')?.remove();
+  modelGallery.appendChild(createAddModelCard());
+}
+
+function mountModelThumbnail(model, container) {
+  const thumbnailRenderer = new THREE.WebGLRenderer({
+    alpha: true,
+    antialias: true,
+  });
+  thumbnailRenderer.setClearColor(0x000000, 0);
+  thumbnailRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  thumbnailRenderer.setSize(220, 220, false);
+  thumbnailRenderer.domElement.className = 'model-card-canvas';
+  container.replaceChildren(thumbnailRenderer.domElement);
+
+  const thumbnailScene = new THREE.Scene();
+  thumbnailScene.add(new THREE.HemisphereLight(0xffffff, 0x5f6f89, 2.2));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+  keyLight.position.set(2, 4, 4);
+  thumbnailScene.add(keyLight);
+
+  const thumbnailCamera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  thumbnailCamera.position.set(0, 0.35, 2.6);
+  thumbnailCamera.lookAt(0, 0.15, 0);
+
+  const onLoad = (loadedModel) => {
+    const object = model.format === 'glb' ? loadedModel.scene : loadedModel;
+    fitThumbnailModel(object);
+    thumbnailScene.add(object);
+    thumbnailRenderer.render(thumbnailScene, thumbnailCamera);
+  };
+  const onError = (error) => {
+    console.error(error);
+    container.textContent = '3D';
+  };
+
+  if (model.format === 'glb') {
+    new GLTFLoader().load(model.modelUrl, onLoad, undefined, onError);
+    return;
+  }
+
+  new FBXLoader().load(model.modelUrl, onLoad, undefined, onError);
+}
+
+function fitThumbnailModel(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxSize = Math.max(size.x, size.y, size.z) || 1;
+  const scale = 0.9 / maxSize;
+
+  model.scale.setScalar(scale);
+  model.position.set(-center.x * scale, -center.y * scale - 0.04, -center.z * scale);
+}
+
+function selectGalleryModel(event) {
+  const addCard = event.target.closest('[data-action="add-model"]');
+  if (addCard) {
+    openLibrary();
+    return;
+  }
+
+  const card = event.target.closest('[data-model-id]');
+  if (!card || card.disabled) {
+    return;
+  }
+
+  selectModel(card.dataset.modelId);
+}
+
+function openLibrary() {
+  modelImageInput.click();
+}
+
+function selectModel(value) {
+  modelSelect.value = value;
+  selectedModelReady = false;
+  startButton.disabled = true;
+  setModelStatus('モデルを読み込み中...');
+  updateModelGallerySelection(value);
+  loadModelOption(value);
+}
+
+function updateModelGallerySelection(value) {
+  modelGallery.querySelectorAll('[data-model-id]').forEach((card) => {
+    card.classList.toggle('is-selected', card.dataset.modelId === value);
+    card.setAttribute('aria-pressed', String(card.dataset.modelId === value));
+  });
 }
 
 function loadPendingModelTasks() {
@@ -189,6 +379,8 @@ function savePendingModelTask(task) {
 function removePendingModelTask(taskId) {
   writePendingModelTasks(readPendingModelTasks().filter((task) => task.taskId !== taskId));
   findModelOption(taskId)?.remove();
+  findModelCard(taskId)?.remove();
+  ensureAddModelCard();
 }
 
 function updatePendingModelTask(task) {
@@ -206,7 +398,7 @@ function loadModelOption(value) {
     return;
   }
 
-  setStatus(`${option.textContent} モデルを読み込み中...`);
+  setModelStatus('モデルを読み込み中...');
   const modelUrl = option.dataset.url;
   const format = option.dataset.format;
   const onLoad = (model) => {
@@ -221,11 +413,18 @@ function loadModelOption(value) {
     duck = modelGroup;
     applyModelTransform();
     scene.add(duck);
-    setStatus('カメラを起動できます。');
+    updateModelGallerySelection(value);
+    selectedModelReady = true;
+    startButton.disabled = false;
+    setModelStatus('');
+    finishInitialLoading();
   };
   const onError = (error) => {
     console.error(error);
-    setStatus(`${option.textContent} モデルの読み込みに失敗しました。`);
+    selectedModelReady = false;
+    startButton.disabled = true;
+    setModelStatus('モデルの読み込みに失敗しました。');
+    finishInitialLoading();
   };
 
   if (format === 'glb') {
@@ -248,8 +447,14 @@ function fitModel(model) {
 }
 
 async function startCamera() {
+  if (!selectedModelReady) {
+    setModelStatus('モデルを選択して読み込みが完了するまでお待ちください。');
+    return;
+  }
+
   if (!navigator.mediaDevices?.getUserMedia) {
-    setStatus('このブラウザではカメラを起動できません。');
+    startButton.disabled = true;
+    setModelStatus('このブラウザではカメラを起動できません。');
     return;
   }
 
@@ -261,10 +466,11 @@ async function startCamera() {
     captureButton.disabled = false;
     switchCameraButton.disabled = false;
     window.requestAnimationFrame(resizeThree);
-    setStatus('撮影できます。');
+    setStatus('撮影できるよ！！！');
   } catch (error) {
     console.error(error);
-    setStatus('カメラを起動できません。スマホ確認は HTTPS の Tunnel URL で開いてください。');
+    startButton.disabled = true;
+    setModelStatus('カメラを起動できません。HTTPSのTunnel URLを確認してください。');
   }
 }
 
@@ -276,7 +482,7 @@ async function switchCamera() {
     switchCameraButton.disabled = true;
     setStatus('カメラを切り替え中...');
     await startCameraStream(nextFacingMode);
-    setStatus('撮影できます。');
+    setStatus('撮影できるよ！！！');
   } catch (error) {
     console.error(error);
     setStatus('カメラを切り替えられません。');
@@ -350,7 +556,7 @@ function capturePhoto() {
   canvas.toBlob(
     (blob) => {
       if (blob) {
-        setCapturedImage(URL.createObjectURL(blob), blob, imageDataUrl);
+        setCapturedImage(URL.createObjectURL(blob), blob);
         return;
       }
 
@@ -364,19 +570,28 @@ function capturePhoto() {
 function retakePhoto() {
   clearCapturedImage();
   setMode('camera');
+  setStatus('撮影できるよ！！！');
   window.requestAnimationFrame(resizeThree);
 }
 
-function setCapturedImage(imageUrl, blob, imageDataUrl = imageUrl) {
+function goHome() {
+  clearCapturedImage();
+  stopCameraStream();
+  captureButton.disabled = true;
+  switchCameraButton.disabled = true;
+  setMode('home');
+  setStatus('');
+}
+
+function setCapturedImage(imageUrl, blob) {
   clearCapturedImage();
   capturedImageUrl = imageUrl;
   capturedImageBlob = blob;
-  capturedImageDataUrl = imageDataUrl;
   resultImage.src = imageUrl;
   saveLink.href = imageUrl;
   saveLink.download = `duck-camera-${Date.now()}.jpg`;
   setMode('preview');
-  setStatus('撮影しました。保存ボタンから画像を保存できます。');
+  setStatus('撮影できたよ！！！');
 }
 
 function clearCapturedImage() {
@@ -386,7 +601,6 @@ function clearCapturedImage() {
 
   capturedImageUrl = undefined;
   capturedImageBlob = undefined;
-  capturedImageDataUrl = undefined;
   resultImage.removeAttribute('src');
   saveLink.removeAttribute('href');
 }
@@ -394,7 +608,7 @@ function clearCapturedImage() {
 async function generateFromUpload() {
   const file = modelImageInput.files?.[0];
   if (!file) {
-    setStatus('モデル生成に使う画像を選択してください。');
+    setModelStatus('モデル生成に使う画像を選択してください。');
     return;
   }
 
@@ -403,51 +617,29 @@ async function generateFromUpload() {
     modelImageInput.value = '';
   } catch (error) {
     console.error(error);
-    setStatus(error.message || 'モデル生成に失敗しました。');
-  }
-}
-
-async function generateFromCapturedImage() {
-  if (!capturedImageDataUrl) {
-    setStatus('先に画像を撮影してください。');
-    return;
-  }
-
-  try {
-    await startModelGeneration(capturedImageDataUrl, 'camera-model');
-    clearCapturedImage();
-  } catch (error) {
-    console.error(error);
-    setStatus(error.message || 'モデル生成に失敗しました。');
+    setModelStatus(error.message || 'モデル生成に失敗しました。');
   }
 }
 
 async function startModelGeneration(image, name) {
-  generateUploadButton.disabled = true;
-  generateCapturedButton.disabled = true;
-  setStatus('Tripoに画像を送信中...');
+  setModelStatus('Tripoに画像を送信中...');
 
-  try {
-    const createResponse = await fetch(apiUrl('/api/models'), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ image, name }),
-    });
-    const created = await readApiResponse(createResponse);
-    const task = {
-      taskId: created.taskId,
-      name: name?.trim() || '新しいモデル',
-      progress: created.progress || 0,
-    };
-    savePendingModelTask(task);
-    addPendingModelOption(task);
-    setMode('home');
-    setStatus('モデル生成中です。完了後に選択できます。');
-    pollModelTask(task);
-  } finally {
-    generateUploadButton.disabled = false;
-    generateCapturedButton.disabled = false;
-  }
+  const createResponse = await fetch(apiUrl('/api/models'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ image, name }),
+  });
+  const created = await readApiResponse(createResponse);
+  const task = {
+    taskId: created.taskId,
+    name: name?.trim() || '新しいモデル',
+    progress: created.progress || 0,
+  };
+  savePendingModelTask(task);
+  addPendingModelOption(task);
+  setMode('home');
+  setModelStatus('モデル作ってるよ！！');
+  pollModelTask(task);
 }
 
 async function pollModelTask(task) {
@@ -464,13 +656,13 @@ async function pollModelTask(task) {
     if (currentTask.status === 'success') {
       removePendingModelTask(task.taskId);
       addGeneratedModelOption(currentTask.model);
-      setStatus(`${currentTask.model.name} の生成が完了しました。`);
+      setModelStatus('モデルの生成が完了しました。');
       return;
     }
 
     if (['failed', 'cancelled', 'banned'].includes(currentTask.status)) {
       removePendingModelTask(task.taskId);
-      setStatus(currentTask.error || 'モデル生成に失敗しました。');
+      setModelStatus(currentTask.error || 'モデル生成に失敗しました。');
       return;
     }
 
@@ -665,7 +857,10 @@ function applyModelTransform() {
   }
 
   duck.position.set(modelState.x, modelState.y, 0);
-  duck.scale.setScalar(modelState.scale);
+  const landscapeScale = window.innerWidth > window.innerHeight
+    ? Math.min(window.innerWidth / Math.max(window.innerHeight, 1), 2.2)
+    : 1;
+  duck.scale.setScalar(modelState.scale * landscapeScale);
   duck.rotation.set(modelState.rotationX, modelState.rotationY, 0);
 }
 
@@ -674,13 +869,15 @@ function clamp(value, min, max) {
 }
 
 function resizeThree() {
-  const rect = stage.getBoundingClientRect();
+  const container = threeLayer.parentElement || stage;
+  const rect = container.getBoundingClientRect();
   const width = Math.max(rect.width, 1);
   const height = Math.max(rect.height, 1);
 
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
+  applyModelTransform();
 }
 
 function animate() {
@@ -692,16 +889,24 @@ function setStatus(message) {
   statusText.textContent = message;
 }
 
-function setMode(mode) {
-  if (mode === 'home') {
-    modelPreview.appendChild(threeLayer);
-  } else {
-    stage.appendChild(threeLayer);
-  }
+function setModelStatus(message) {
+  startButtonIcon.hidden = Boolean(message);
+  startButtonLabel.textContent = message || '写真を！！撮る！！';
+}
 
-  app.classList.remove('state-home', 'state-camera', 'state-preview');
+function setMode(mode) {
+  app.classList.remove('state-loading', 'state-home', 'state-camera', 'state-preview');
   app.classList.add(`state-${mode}`);
   window.requestAnimationFrame(resizeThree);
+}
+
+function finishInitialLoading() {
+  if (!initialLoading) {
+    return;
+  }
+
+  initialLoading = false;
+  setMode('home');
 }
 
 window.addEventListener('beforeunload', () => {
