@@ -49,14 +49,24 @@ Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです�
 
 ## Vercel デプロイ
 
-フロントとバックエンドを別の Vercel プロジェクトとして作成します。
+Vercel Servicesを使い、1つのVercelプロジェクト内でfrontendとbackendを動かします。
+リポジトリのルートをRoot Directoryにし、Frameworkを`Services`に設定してください。
+ルートの`vercel.json`が`/api/*`をbackend、それ以外をfrontendへルーティングします。
 
-- フロント: Root Directory を `frontend`
-- バックエンド: Root Directory を `backend`
-- バックエンドの環境変数: `TRIPO_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `FRONTEND_ORIGIN`
-- フロントの環境変数: `VITE_API_BASE_URL=https://<backendのURL>`
+Backendで使う環境変数を同じVercelプロジェクトに設定します。
 
-バックエンドの Blob Store は CLI から作成できます。
+- `TRIPO_API_KEY`
+- `BLOB_READ_WRITE_TOKEN`
+- `FRONTEND_ORIGIN`（Servicesでは通常不要）
+
+Blob StoreはVercel DashboardのStorageから同じプロジェクト内に作成します。
+保存後に返るGLBや画像のURLは、Vercel本体とは別のBlob配信URLになります。
+
+```bash
+vercel link
+vercel blob create-store web-cam-models --access public
+vercel --prod
+```
 
 ```bash
 cd backend
