@@ -6,7 +6,13 @@
       "framework": "vite"
     },
     "backend": {
-      "root": "backend"
+      "root": "backend",
+      "entrypoint": "api",
+      "functions": {
+        "api/*.js": {
+          "maxDuration": 300
+        }
+      }
     }
   },
   "rewrites": [
