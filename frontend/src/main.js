@@ -5,6 +5,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const pendingTasksStorageKey = 'web-cam.pending-model-tasks';
 const generationPollInterval = 2000;
+const preferredCameraWidth = 1920;
+const preferredCameraHeight = 1080;
 
 const app = document.querySelector('.app');
 const stage = document.querySelector('.stage');
@@ -504,10 +506,13 @@ async function startCameraStream(facingMode) {
     audio: false,
     video: {
       facingMode: { ideal: facingMode },
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
+      width: { ideal: preferredCameraWidth },
+      height: { ideal: preferredCameraHeight },
     },
   });
+
+  const videoTrack = stream.getVideoTracks()[0];
+  await maximizeVideoResolution(videoTrack);
 
   stopCameraStream();
   currentStream = stream;
@@ -515,6 +520,29 @@ async function startCameraStream(facingMode) {
   video.srcObject = stream;
   video.classList.toggle('is-mirrored', currentFacingMode === 'user');
   await video.play();
+}
+
+async function maximizeVideoResolution(videoTrack) {
+  if (!videoTrack?.getCapabilities || !videoTrack.applyConstraints) {
+    return;
+  }
+
+  const capabilities = videoTrack.getCapabilities();
+  const maxWidth = capabilities.width?.max;
+  const maxHeight = capabilities.height?.max;
+
+  if (!maxWidth || !maxHeight) {
+    return;
+  }
+
+  try {
+    await videoTrack.applyConstraints({
+      width: { ideal: maxWidth, max: maxWidth },
+      height: { ideal: maxHeight, max: maxHeight },
+    });
+  } catch (error) {
+    console.info('カメラの最大解像度へ切り替えられませんでした。', error);
+  }
 }
 
 function stopCameraStream() {
@@ -535,9 +563,15 @@ function capturePhoto() {
   renderer.render(scene, camera);
 
   const rect = (threeLayer.parentElement || stage).getBoundingClientRect();
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-  const outputWidth = Math.round(rect.width * pixelRatio);
-  const outputHeight = Math.round(rect.height * pixelRatio);
+  const outputRatio = Math.max(rect.width / Math.max(rect.height, 1), 0.01);
+  let outputWidth = video.videoWidth;
+  let outputHeight = Math.round(outputWidth / outputRatio);
+
+  if (outputHeight > video.videoHeight) {
+    outputHeight = video.videoHeight;
+    outputWidth = Math.round(outputHeight * outputRatio);
+  }
+
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
 
