@@ -8,6 +8,7 @@ Three.js の duck モデルをカメラ映像に重ねて撮影・保存する W
 ## セットアップ
 
 ```bash
+cp backend/.env.example backend/.env
 make install
 ```
 
@@ -25,8 +26,7 @@ make dev
 make backend
 ```
 
-`backend/.env` またはルートの `.env` に `TRIPO_API_KEY` と
-`BLOB_READ_WRITE_TOKEN` を設定してください。
+`backend/.env` に `TRIPO_API_KEY` と `BLOB_READ_WRITE_TOKEN` を設定してください。
 
 ## Docker 実行
 
@@ -53,7 +53,7 @@ Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです�
 
 - フロント: Root Directory を `frontend`
 - バックエンド: Root Directory を `backend`
-- バックエンドの環境変数: `TRIPO_API_KEY`, `BLOB_READ_WRITE_TOKEN`
+- バックエンドの環境変数: `TRIPO_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `FRONTEND_ORIGIN`
 - フロントの環境変数: `VITE_API_BASE_URL=https://<backendのURL>`
 
 バックエンドの Blob Store は CLI から作成できます。

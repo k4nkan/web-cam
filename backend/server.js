@@ -1,10 +1,13 @@
 import http from 'node:http';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import modelsHandler from './api/models.js';
 import taskHandler from './api/task.js';
 
-dotenv.config({ path: process.env.ENV_FILE || '../.env' });
-dotenv.config();
+dotenv.config({
+  path: join(dirname(fileURLToPath(import.meta.url)), '.env'),
+});
 
 const port = Number(process.env.PORT || 3000);
 
