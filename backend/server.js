@@ -1,6 +1,10 @@
 import http from 'node:http';
+import dotenv from 'dotenv';
 import modelsHandler from './api/models.js';
 import taskHandler from './api/task.js';
+
+dotenv.config({ path: process.env.ENV_FILE || '../.env' });
+dotenv.config();
 
 const port = Number(process.env.PORT || 3000);
 
