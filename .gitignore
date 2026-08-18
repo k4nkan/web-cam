@@ -6,6 +6,7 @@ backend/data
 .env.*
 !.env.example
 !**/.env.example
+.vercel
 .DS_Store
 npm-debug.log
 test-results
