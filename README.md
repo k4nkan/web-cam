@@ -59,6 +59,7 @@ Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです�
 バックエンドの Blob Store は CLI から作成できます。
 
 ```bash
+cd backend
 vercel link
 vercel blob create-store web-cam-models --access public
 ```

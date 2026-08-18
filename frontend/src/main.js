@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './style.css';
 
-const duckModelUrl = '/material/duck.fbx';
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 const app = document.querySelector('.app');
 const stage = document.querySelector('.stage');
 const video = document.querySelector('#cameraVideo');
 const threeLayer = document.querySelector('#threeLayer');
 const startButton = document.querySelector('#startButton');
+const modelSelect = document.querySelector('#modelSelect');
+const modelImageInput = document.querySelector('#modelImageInput');
+const generateUploadButton = document.querySelector('#generateUploadButton');
 const captureButton = document.querySelector('#captureButton');
 const switchCameraButton = document.querySelector('#switchCameraButton');
 const modelScaleRange = document.querySelector('#modelScaleRange');
@@ -16,6 +20,7 @@ const moveButtons = document.querySelectorAll('[data-move]');
 const saveLink = document.querySelector('#saveLink');
 const resultImage = document.querySelector('#resultImage');
 const retakeButton = document.querySelector('#retakeButton');
+const generateCapturedButton = document.querySelector('#generateCapturedButton');
 const statusText = document.querySelector('#statusText');
 
 const modelState = {
@@ -49,12 +54,16 @@ let currentFacingMode = 'environment';
 let animationFrameId;
 let capturedImageUrl;
 let capturedImageBlob;
+let capturedImageDataUrl;
 let lastMoveButtonTouchTime = 0;
 
 initThree();
-loadDuck();
+loadModelCatalog();
+loadModelOption(modelSelect.value);
 
 startButton.addEventListener('click', startCamera);
+modelSelect.addEventListener('change', () => loadModelOption(modelSelect.value));
+generateUploadButton.addEventListener('click', generateFromUpload);
 captureButton.addEventListener('click', capturePhoto);
 switchCameraButton.addEventListener('click', switchCamera);
 modelScaleRange.addEventListener('input', updateModelScale);
@@ -63,6 +72,7 @@ moveButtons.forEach((button) => {
   button.addEventListener('keydown', handleMoveButtonInput);
 });
 retakeButton.addEventListener('click', retakePhoto);
+generateCapturedButton.addEventListener('click', generateFromCapturedImage);
 saveLink.addEventListener('click', saveCapturedPhoto);
 stage.addEventListener('pointerdown', startModelDrag);
 window.addEventListener('pointermove', dragModel);
@@ -97,27 +107,67 @@ function initThree() {
   animate();
 }
 
-function loadDuck() {
-  setStatus('duck モデルを読み込み中...');
+async function loadModelCatalog() {
+  try {
+    const response = await fetch(apiUrl('/api/models'));
+    if (!response.ok) {
+      return;
+    }
 
-  const loader = new FBXLoader();
-  loader.load(
-    duckModelUrl,
-    (model) => {
-      const duckGroup = new THREE.Group();
-      fitModel(model);
-      duckGroup.add(model);
-      duck = duckGroup;
-      applyModelTransform();
-      scene.add(duck);
-      setStatus('カメラを起動できます。');
-    },
-    undefined,
-    (error) => {
-      console.error(error);
-      setStatus('duck モデルの読み込みに失敗しました。');
-    },
-  );
+    const payload = await response.json();
+    payload.models.forEach(addGeneratedModelOption);
+  } catch (error) {
+    console.info('生成済みモデル一覧はまだ利用できません。', error);
+  }
+}
+
+function addGeneratedModelOption(model) {
+  if (modelSelect.querySelector(`option[value="${CSS.escape(model.id)}"]`)) {
+    return;
+  }
+
+  const option = document.createElement('option');
+  option.value = model.id;
+  option.textContent = model.name;
+  option.dataset.url = model.modelUrl;
+  option.dataset.format = 'glb';
+  modelSelect.appendChild(option);
+}
+
+function loadModelOption(value) {
+  const option = modelSelect.querySelector(`option[value="${CSS.escape(value)}"]`);
+  if (!option) {
+    return;
+  }
+
+  setStatus(`${option.textContent} モデルを読み込み中...`);
+  const modelUrl = option.dataset.url;
+  const format = option.dataset.format;
+  const onLoad = (model) => {
+    const object = format === 'glb' ? model.scene : model;
+    const modelGroup = new THREE.Group();
+    fitModel(object);
+    modelGroup.add(object);
+
+    if (duck) {
+      scene.remove(duck);
+    }
+    duck = modelGroup;
+    applyModelTransform();
+    scene.add(duck);
+    setStatus('カメラを起動できます。');
+  };
+  const onError = (error) => {
+    console.error(error);
+    setStatus(`${option.textContent} モデルの読み込みに失敗しました。`);
+  };
+
+  if (format === 'glb') {
+    new GLTFLoader().load(modelUrl, onLoad, undefined, onError);
+    return;
+  }
+
+  new FBXLoader().load(modelUrl, onLoad, undefined, onError);
 }
 
 function fitModel(model) {
@@ -226,21 +276,22 @@ function capturePhoto() {
   context.drawImage(renderer.domElement, 0, 0, outputWidth, outputHeight);
 
   if (!canvas.toBlob) {
-    setCapturedImage(canvas.toDataURL('image/jpeg', 0.92));
+    setCapturedImage(canvas.toDataURL('image/jpeg', 0.86));
     return;
   }
 
+  const imageDataUrl = canvas.toDataURL('image/jpeg', 0.86);
   canvas.toBlob(
     (blob) => {
       if (blob) {
-        setCapturedImage(URL.createObjectURL(blob), blob);
+        setCapturedImage(URL.createObjectURL(blob), blob, imageDataUrl);
         return;
       }
 
-      setCapturedImage(canvas.toDataURL('image/jpeg', 0.92));
+      setCapturedImage(imageDataUrl);
     },
     'image/jpeg',
-    0.92,
+    0.86,
   );
 }
 
@@ -250,10 +301,11 @@ function retakePhoto() {
   window.requestAnimationFrame(resizeThree);
 }
 
-function setCapturedImage(imageUrl, blob) {
+function setCapturedImage(imageUrl, blob, imageDataUrl = imageUrl) {
   clearCapturedImage();
   capturedImageUrl = imageUrl;
   capturedImageBlob = blob;
+  capturedImageDataUrl = imageDataUrl;
   resultImage.src = imageUrl;
   saveLink.href = imageUrl;
   saveLink.download = `duck-camera-${Date.now()}.jpg`;
@@ -268,8 +320,103 @@ function clearCapturedImage() {
 
   capturedImageUrl = undefined;
   capturedImageBlob = undefined;
+  capturedImageDataUrl = undefined;
   resultImage.removeAttribute('src');
   saveLink.removeAttribute('href');
+}
+
+async function generateFromUpload() {
+  const file = modelImageInput.files?.[0];
+  if (!file) {
+    setStatus('モデル生成に使う画像を選択してください。');
+    return;
+  }
+
+  try {
+    await generateModelFromImage(await readFileAsDataUrl(file), file.name);
+    modelImageInput.value = '';
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || 'モデル生成に失敗しました。');
+  }
+}
+
+async function generateFromCapturedImage() {
+  if (!capturedImageDataUrl) {
+    setStatus('先に画像を撮影してください。');
+    return;
+  }
+
+  try {
+    await generateModelFromImage(capturedImageDataUrl, 'camera-model');
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || 'モデル生成に失敗しました。');
+  }
+}
+
+async function generateModelFromImage(image, name) {
+  generateUploadButton.disabled = true;
+  generateCapturedButton.disabled = true;
+  setStatus('Tripoに画像を送信中...');
+
+  try {
+    const createResponse = await fetch(apiUrl('/api/models'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ image, name }),
+    });
+    const created = await readApiResponse(createResponse);
+    const taskUrl = new URL(apiUrl('/api/task'), window.location.origin);
+    taskUrl.searchParams.set('taskId', created.taskId);
+    if (name) {
+      taskUrl.searchParams.set('name', name);
+    }
+
+    let task = created;
+    while (task.status !== 'success') {
+      if (['failed', 'cancelled', 'banned'].includes(task.status)) {
+        throw new Error(task.error || 'Tripoでモデル生成に失敗しました。');
+      }
+      setStatus(`モデルを生成中... ${task.progress || 0}%`);
+      await wait(1500);
+      const taskResponse = await fetch(taskUrl);
+      task = await readApiResponse(taskResponse);
+    }
+
+    addGeneratedModelOption(task.model);
+    modelSelect.value = task.model.id;
+    loadModelOption(task.model.id);
+    setStatus('モデルを追加しました。');
+  } finally {
+    generateUploadButton.disabled = false;
+    generateCapturedButton.disabled = false;
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(reader.result));
+    reader.addEventListener('error', () => reject(new Error('画像を読み込めません。')));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readApiResponse(response) {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || 'バックエンドAPIでエラーが発生しました。');
+  }
+  return payload;
+}
+
+function apiUrl(path) {
+  return `${apiBaseUrl}${path}`;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 async function saveCapturedPhoto(event) {

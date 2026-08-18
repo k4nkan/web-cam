@@ -2,6 +2,9 @@ node_modules
 dist
 frontend/dist
 backend/data
+.env
+.env.*
+!.env.example
 .DS_Store
 npm-debug.log
 test-results

@@ -17,6 +17,16 @@
   <body>
     <main class="app state-home">
       <section class="home-screen" aria-label="start camera">
+        <div class="model-picker">
+          <label for="modelSelect">モデル</label>
+          <select id="modelSelect">
+            <option value="duck" data-url="/material/duck.fbx" data-format="fbx">duck</option>
+          </select>
+          <input id="modelImageInput" type="file" accept="image/jpeg,image/png,image/webp" />
+          <button id="generateUploadButton" class="secondary-button" type="button">
+            画像からモデル生成
+          </button>
+        </div>
         <button id="startButton" class="start-button" type="button">
           <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
           カメラ起動
@@ -68,11 +78,12 @@
         <img id="resultImage" alt="撮影した写真" />
         <div class="preview-actions">
           <button id="retakeButton" class="secondary-button" type="button">再撮影</button>
+          <button id="generateCapturedButton" class="secondary-button" type="button">この画像から生成</button>
           <a id="saveLink" class="save-link" download="duck-camera.jpg">保存</a>
         </div>
       </section>
 
-      <p id="statusText" class="sr-only" role="status"></p>
+      <p id="statusText" class="status-text" role="status"></p>
     </main>
 
     <script type="module" src="/src/main.js"></script>
