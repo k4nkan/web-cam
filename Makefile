@@ -44,10 +44,10 @@ docker-tunnel:
 	docker compose --profile tunnel up --build
 
 docker-config:
-	docker compose config
+	docker compose config --quiet
 
 docker-tunnel-config:
-	docker compose --profile tunnel config
+	docker compose --profile tunnel config --quiet
 
 audit:
 	npm --prefix frontend audit
