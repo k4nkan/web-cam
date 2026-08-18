@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './style.css';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const pendingTasksStorageKey = 'web-cam.pending-model-tasks';
+const generationPollInterval = 2000;
 
 const app = document.querySelector('.app');
 const stage = document.querySelector('.stage');
@@ -59,6 +61,7 @@ let lastMoveButtonTouchTime = 0;
 
 initThree();
 loadModelCatalog();
+loadPendingModelTasks();
 loadModelOption(modelSelect.value);
 
 startButton.addEventListener('click', startCamera);
@@ -122,9 +125,7 @@ async function loadModelCatalog() {
 }
 
 function addGeneratedModelOption(model) {
-  if (modelSelect.querySelector(`option[value="${CSS.escape(model.id)}"]`)) {
-    return;
-  }
+  findModelOption(model.id)?.remove();
 
   const option = document.createElement('option');
   option.value = model.id;
@@ -132,6 +133,57 @@ function addGeneratedModelOption(model) {
   option.dataset.url = model.modelUrl;
   option.dataset.format = 'glb';
   modelSelect.appendChild(option);
+}
+
+function addPendingModelOption(task) {
+  findModelOption(task.taskId)?.remove();
+
+  const option = document.createElement('option');
+  option.value = task.taskId;
+  option.textContent = `${task.name || '新しいモデル'}（生成中... ${task.progress || 0}%）`;
+  option.disabled = true;
+  option.dataset.pending = 'true';
+  modelSelect.appendChild(option);
+}
+
+function findModelOption(value) {
+  return [...modelSelect.options].find((option) => option.value === value);
+}
+
+function loadPendingModelTasks() {
+  readPendingModelTasks().forEach((task) => {
+    addPendingModelOption(task);
+    pollModelTask(task);
+  });
+}
+
+function readPendingModelTasks() {
+  try {
+    return JSON.parse(localStorage.getItem(pendingTasksStorageKey) || '[]');
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+function writePendingModelTasks(tasks) {
+  localStorage.setItem(pendingTasksStorageKey, JSON.stringify(tasks));
+}
+
+function savePendingModelTask(task) {
+  const tasks = readPendingModelTasks().filter((item) => item.taskId !== task.taskId);
+  tasks.push(task);
+  writePendingModelTasks(tasks);
+}
+
+function removePendingModelTask(taskId) {
+  writePendingModelTasks(readPendingModelTasks().filter((task) => task.taskId !== taskId));
+  findModelOption(taskId)?.remove();
+}
+
+function updatePendingModelTask(task) {
+  addPendingModelOption(task);
+  savePendingModelTask(task);
 }
 
 function loadModelOption(value) {
@@ -333,7 +385,7 @@ async function generateFromUpload() {
   }
 
   try {
-    await generateModelFromImage(await readFileAsDataUrl(file), file.name);
+    await startModelGeneration(await readFileAsDataUrl(file), file.name);
     modelImageInput.value = '';
   } catch (error) {
     console.error(error);
@@ -348,14 +400,15 @@ async function generateFromCapturedImage() {
   }
 
   try {
-    await generateModelFromImage(capturedImageDataUrl, 'camera-model');
+    await startModelGeneration(capturedImageDataUrl, 'camera-model');
+    clearCapturedImage();
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'モデル生成に失敗しました。');
   }
 }
 
-async function generateModelFromImage(image, name) {
+async function startModelGeneration(image, name) {
   generateUploadButton.disabled = true;
   generateCapturedButton.disabled = true;
   setStatus('Tripoに画像を送信中...');
@@ -367,31 +420,55 @@ async function generateModelFromImage(image, name) {
       body: JSON.stringify({ image, name }),
     });
     const created = await readApiResponse(createResponse);
-    const taskUrl = new URL(apiUrl('/api/task'), window.location.origin);
-    taskUrl.searchParams.set('taskId', created.taskId);
-    if (name) {
-      taskUrl.searchParams.set('name', name);
-    }
-
-    let task = created;
-    while (task.status !== 'success') {
-      if (['failed', 'cancelled', 'banned'].includes(task.status)) {
-        throw new Error(task.error || 'Tripoでモデル生成に失敗しました。');
-      }
-      setStatus(`モデルを生成中... ${task.progress || 0}%`);
-      await wait(1500);
-      const taskResponse = await fetch(taskUrl);
-      task = await readApiResponse(taskResponse);
-    }
-
-    addGeneratedModelOption(task.model);
-    modelSelect.value = task.model.id;
-    loadModelOption(task.model.id);
-    setStatus('モデルを追加しました。');
+    const task = {
+      taskId: created.taskId,
+      name: name?.trim() || '新しいモデル',
+      progress: created.progress || 0,
+    };
+    savePendingModelTask(task);
+    addPendingModelOption(task);
+    setMode('home');
+    setStatus('モデル生成中です。完了後に選択できます。');
+    pollModelTask(task);
   } finally {
     generateUploadButton.disabled = false;
     generateCapturedButton.disabled = false;
   }
+}
+
+async function pollModelTask(task) {
+  try {
+    const taskUrl = new URL(apiUrl('/api/task'), window.location.origin);
+    taskUrl.searchParams.set('taskId', task.taskId);
+    if (task.name) {
+      taskUrl.searchParams.set('name', task.name);
+    }
+
+    const taskResponse = await fetch(taskUrl);
+    const currentTask = await readApiResponse(taskResponse);
+
+    if (currentTask.status === 'success') {
+      removePendingModelTask(task.taskId);
+      addGeneratedModelOption(currentTask.model);
+      setStatus(`${currentTask.model.name} の生成が完了しました。`);
+      return;
+    }
+
+    if (['failed', 'cancelled', 'banned'].includes(currentTask.status)) {
+      removePendingModelTask(task.taskId);
+      setStatus(currentTask.error || 'モデル生成に失敗しました。');
+      return;
+    }
+
+    updatePendingModelTask({
+      ...task,
+      progress: currentTask.progress || 0,
+    });
+  } catch (error) {
+    console.info('モデル生成の状態確認を再試行します。', error);
+  }
+
+  window.setTimeout(() => pollModelTask(task), generationPollInterval);
 }
 
 function readFileAsDataUrl(file) {
@@ -413,10 +490,6 @@ async function readApiResponse(response) {
 
 function apiUrl(path) {
   return `${apiBaseUrl}${path}`;
-}
-
-function wait(milliseconds) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 async function saveCapturedPhoto(event) {
