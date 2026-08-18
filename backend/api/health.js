@@ -1,3 +1,5 @@
+import { sendJson } from '../src/http.js';
+
 export default function handler(_request, response) {
-  response.status(200).json({ ok: true });
+  sendJson(response, 200, { ok: true });
 }

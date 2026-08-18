@@ -7,7 +7,9 @@ export function setCors(response) {
 }
 
 export function sendJson(response, status, payload) {
-  response.status(status).json(payload);
+  response.statusCode = status;
+  response.setHeader('content-type', 'application/json');
+  response.end(JSON.stringify(payload));
 }
 
 export function sendError(response, error) {
