@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,700,0,0"
+      rel="stylesheet"
+    />
+    <title>3D-cam</title>
+  </head>
+  <body>
+    <main class="app state-home">
+      <section class="home-screen" aria-label="start camera">
+        <div class="model-picker">
+          <label for="modelSelect">モデル</label>
+          <select id="modelSelect">
+            <option value="duck" data-url="/material/duck.fbx" data-format="fbx">duck</option>
+          </select>
+          <input id="modelImageInput" type="file" accept="image/jpeg,image/png,image/webp" />
+          <button id="generateUploadButton" class="secondary-button" type="button">
+            画像からモデル生成
+          </button>
+        </div>
+        <button id="startButton" class="start-button" type="button">
+          <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
+          カメラ起動
+        </button>
+      </section>
+
+      <section class="stage" aria-label="camera">
+        <video id="cameraVideo" autoplay muted playsinline></video>
+        <div id="threeLayer" class="three-layer"></div>
+        <button id="switchCameraButton" class="camera-switch-button" type="button" aria-label="カメラ切替" disabled>
+          <span class="material-symbols-rounded" aria-hidden="true">flip_camera_ios</span>
+        </button>
+        <button id="captureButton" class="capture-button" type="button" aria-label="撮影" disabled>
+          <span class="material-symbols-rounded" aria-hidden="true">camera</span>
+        </button>
+        <div class="scale-control" aria-label="model size controls">
+          <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          <input
+            id="modelScaleRange"
+            class="model-scale-range"
+            type="range"
+            min="0.5"
+            max="1.8"
+            step="0.05"
+            value="1"
+            aria-label="モデルサイズ"
+          />
+          <span class="material-symbols-rounded" aria-hidden="true">remove</span>
+        </div>
+        <div class="model-controls" aria-label="model controls">
+          <div class="move-pad">
+            <button type="button" data-move="up" aria-label="上へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_up</span>
+            </button>
+            <button type="button" data-move="left" aria-label="左へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_left</span>
+            </button>
+            <button type="button" data-move="right" aria-label="右へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_right</span>
+            </button>
+            <button type="button" data-move="down" aria-label="下へ移動">
+              <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_down</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="previewScreen" class="preview-screen" aria-label="preview">
+        <img id="resultImage" alt="撮影した写真" />
+        <div class="preview-actions">
+          <button id="retakeButton" class="secondary-button" type="button">再撮影</button>
+          <button id="generateCapturedButton" class="secondary-button" type="button">この画像から生成</button>
+          <a id="saveLink" class="save-link" download="duck-camera.jpg">保存</a>
+        </div>
+      </section>
+
+      <p id="statusText" class="status-text" role="status"></p>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

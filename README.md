@@ -1,10 +1,14 @@
 # web-cam
 
-Three.js の duck モデルをカメラ映像に重ねて撮影・保存する最小 Web アプリです。
+Three.js の duck モデルをカメラ映像に重ねて撮影・保存する Web アプリです。
+
+フロントエンドは `frontend/`、Tripo API と Vercel Blob を扱うバックエンドは
+`backend/` に分離しています。
 
 ## セットアップ
 
 ```bash
+cp backend/.env.example backend/.env
 make install
 ```
 
@@ -15,6 +19,14 @@ make dev
 ```
 
 ブラウザで `http://localhost:5173` を開きます。
+
+バックエンド API は別ターミナルで起動します。
+
+```bash
+make backend
+```
+
+`backend/.env` に `TRIPO_API_KEY` と `BLOB_READ_WRITE_TOKEN` を設定してください。
 
 ## Docker 実行
 
@@ -34,6 +46,23 @@ make docker-tunnel
 
 ログに出る `https://...trycloudflare.com` の URL をスマホで開きます。
 Vite の Host 制限に合わせて `*.trycloudflare.com` は許可済みです。
+
+## Vercel デプロイ
+
+フロントとバックエンドを別の Vercel プロジェクトとして作成します。
+
+- フロント: Root Directory を `frontend`
+- バックエンド: Root Directory を `backend`
+- バックエンドの環境変数: `TRIPO_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `FRONTEND_ORIGIN`
+- フロントの環境変数: `VITE_API_BASE_URL=https://<backendのURL>`
+
+バックエンドの Blob Store は CLI から作成できます。
+
+```bash
+cd backend
+vercel link
+vercel blob create-store web-cam-models --access public
+```
 
 ## 操作
 

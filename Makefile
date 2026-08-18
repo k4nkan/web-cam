@@ -1,14 +1,15 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build preview docker docker-tunnel docker-config docker-tunnel-config audit check stop clean
+.PHONY: help install dev backend backend-install build preview docker docker-tunnel docker-config docker-tunnel-config audit check stop clean
 
 help:
 	@echo "Usage:"
-	@echo "  make install              Install npm dependencies"
-	@echo "  make dev                  Start local Vite dev server"
-	@echo "  make build                Build production assets"
-	@echo "  make preview              Preview built assets"
-	@echo "  make docker               Start app with Docker"
+	@echo "  make install              Install frontend/backend dependencies"
+	@echo "  make dev                  Start the frontend Vite dev server"
+	@echo "  make backend              Start the local backend API"
+	@echo "  make build                Build frontend production assets"
+	@echo "  make preview              Preview built frontend assets"
+	@echo "  make docker               Start frontend and backend with Docker"
 	@echo "  make docker-tunnel        Start app with Cloudflare Tunnel"
 	@echo "  make docker-config        Validate docker compose config"
 	@echo "  make docker-tunnel-config Validate tunnel compose config"
@@ -18,31 +19,39 @@ help:
 	@echo "  make clean                Remove build output"
 
 install:
-	npm install
+	npm --prefix frontend install
+	npm --prefix backend install
 
 dev:
-	npm run dev -- --host 0.0.0.0
+	npm --prefix frontend run dev -- --host 0.0.0.0
+
+backend:
+	npm --prefix backend run dev
+
+backend-install:
+	npm --prefix backend install
 
 build:
-	npm run build
+	npm --prefix frontend run build
 
 preview:
-	npm run preview
+	npm --prefix frontend run preview
 
 docker:
-	docker compose up --build app
+	docker compose up --build
 
 docker-tunnel:
 	docker compose --profile tunnel up --build
 
 docker-config:
-	docker compose config
+	docker compose config --quiet
 
 docker-tunnel-config:
-	docker compose --profile tunnel config
+	docker compose --profile tunnel config --quiet
 
 audit:
-	npm audit
+	npm --prefix frontend audit
+	npm --prefix backend audit
 
 check: build audit docker-config docker-tunnel-config
 
@@ -50,4 +59,4 @@ stop:
 	docker compose down
 
 clean:
-	rm -rf dist
+	rm -rf frontend/dist
