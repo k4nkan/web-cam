@@ -7,6 +7,7 @@ const pendingTasksStorageKey = 'web-cam.pending-model-tasks';
 const generationPollInterval = 2000;
 const preferredCameraWidth = 1920;
 const preferredCameraHeight = 1080;
+const maxModelRenderScale = 2.4;
 
 const app = document.querySelector('.app');
 const stage = document.querySelector('.stage');
@@ -536,9 +537,12 @@ async function maximizeVideoResolution(videoTrack) {
   }
 
   try {
+    const targetWidth = Math.min(maxWidth, preferredCameraWidth);
+    const targetHeight = Math.min(maxHeight, preferredCameraHeight);
+
     await videoTrack.applyConstraints({
-      width: { ideal: maxWidth, max: maxWidth },
-      height: { ideal: maxHeight, max: maxHeight },
+      width: { ideal: targetWidth, max: targetWidth },
+      height: { ideal: targetHeight, max: targetHeight },
     });
   } catch (error) {
     console.info('カメラの最大解像度へ切り替えられませんでした。', error);
@@ -808,7 +812,10 @@ function drawVideoCover(context, outputWidth, outputHeight) {
 }
 
 function updateModelScale(event) {
-  modelState.scale = Number(event.target.value);
+  const requestedScale = Number(event.target.value);
+  modelState.scale = Number.isFinite(requestedScale)
+    ? clamp(requestedScale, 0.5, 1.8)
+    : 1;
   applyModelTransform();
 }
 
@@ -891,10 +898,13 @@ function applyModelTransform() {
   }
 
   duck.position.set(modelState.x, modelState.y, 0);
+  const modelScale = Number.isFinite(modelState.scale)
+    ? clamp(modelState.scale, 0.5, 1.8)
+    : 1;
   const landscapeScale = window.innerWidth > window.innerHeight
     ? Math.min(window.innerWidth / Math.max(window.innerHeight, 1), 2.2)
     : 1;
-  duck.scale.setScalar(modelState.scale * landscapeScale);
+  duck.scale.setScalar(Math.min(modelScale * landscapeScale, maxModelRenderScale));
   duck.rotation.set(modelState.rotationX, modelState.rotationY, 0);
 }
 

@@ -60,9 +60,11 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await page.locator('[data-move="right"]').click({ clickCount: 4, delay: 40 });
   await page.locator('[data-move="up"]').click({ clickCount: 4, delay: 40 });
   await page.locator('#modelScaleRange').evaluate((range) => {
-    range.value = '1.35';
+    range.value = range.max;
     range.dispatchEvent(new Event('input', { bubbles: true }));
   });
+  await expect(page.locator('#modelScaleRange')).toHaveValue('1.8');
+  await expect(page.locator('.three-layer canvas')).toBeVisible();
 
   const zoomScale = await page.evaluate(() => window.visualViewport?.scale ?? 1);
   expect(zoomScale).toBe(1);
