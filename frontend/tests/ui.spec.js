@@ -2,8 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 test('loading screen stays isolated until the initial catalog is ready', async ({ page }) => {
+  let releaseCatalog;
+  const catalogReady = new Promise((resolve) => {
+    releaseCatalog = resolve;
+  });
   await page.route('**/api/models', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await catalogReady;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -19,11 +23,14 @@ test('loading screen stays isolated until the initial catalog is ready', async (
   await expect(page.locator('.home-screen')).toBeHidden();
   await expect(page.locator('.stage')).toBeHidden();
   await expect(page.locator('.preview-screen')).toBeHidden();
+  await expect(page.locator('#photoGalleryScreen')).toBeHidden();
+  releaseCatalog();
   await expect(page.locator('.app')).toHaveClass(/state-home/);
 });
 
 test('camera UI states stay usable and screenshotable', async ({ page }, testInfo) => {
   const duckFbx = await readFile(new URL('../../backend/assets/duck.fbx', import.meta.url));
+  let photoUploads = 0;
   await page.addInitScript(() => {
     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     window.cameraStartCalls = 0;
@@ -48,6 +55,32 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
       body: duckFbx,
     });
   });
+  await page.route('**/api/photos', async (route) => {
+    if (route.request().method() === 'POST') {
+      photoUploads += 1;
+      const body = route.request().postDataJSON();
+      expect(body.id).toMatch(/^\d{13}-[A-Za-z0-9-]{8,80}$/);
+      expect(body.image).toMatch(/^data:image\/jpeg;base64,/);
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          photo: {
+            id: body.id,
+            url: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect width="200" height="200" fill="%235d9a61"/%3E%3C/svg%3E',
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ photos: [] }),
+    });
+  });
 
   await page.goto('/');
 
@@ -55,6 +88,11 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await expect(page.locator('[data-action="add-model"]')).toBeVisible();
   await expect(page.locator('#startButton')).toBeEnabled();
   await expect(page.locator('#startButtonIcon')).toBeVisible();
+  await expect(page.locator('#photoGalleryButton')).toBeVisible();
+  await expect(page.locator('#photoGalleryButton')).toContainText('みんなの写真');
+  const startBox = await page.locator('#startButton').boundingBox();
+  const galleryBox = await page.locator('#photoGalleryButton').boundingBox();
+  expect(galleryBox.y + galleryBox.height).toBeLessThanOrEqual(startBox.y);
   await page.screenshot({ path: testInfo.outputPath('home.png') });
 
   await page.locator('#startButton').evaluate((button) => {
@@ -67,6 +105,7 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await expect.poll(() => page.evaluate(() => window.cameraStartCalls)).toBe(1);
   await expect(page.locator('#statusText')).toHaveText('撮影できるよ！！！');
   await expect(page.locator('#captureButton')).toBeEnabled();
+  await expect(page.locator('#photoGalleryButton')).toBeHidden();
   await expect(page.locator('#switchCameraButton')).toBeEnabled();
   await expect(page.locator('#homeFromCameraButton')).toBeVisible();
   await expect(page.locator('.three-layer canvas')).toBeVisible();
@@ -86,11 +125,17 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
 
   await page.screenshot({ path: testInfo.outputPath('camera.png') });
 
-  await page.locator('#captureButton').click();
+  await page.locator('#captureButton').evaluate((button) => {
+    button.click();
+    button.click();
+    button.click();
+    button.click();
+  });
   await expect(page.locator('.app')).toHaveClass(/state-preview/);
   await expect(page.locator('#homeFromPreviewButton')).toBeVisible();
   await expect(page.locator('#generateCapturedButton')).toHaveCount(0);
-  await expect(page.locator('#statusText')).toHaveText('撮影できたよ！！！');
+  await expect(page.locator('#statusText')).toHaveText('みんなの写真に保存したよ！！！');
+  expect(photoUploads).toBe(1);
   await expect(page.locator('#saveLink')).toHaveAttribute('href', /^(blob:|data:image\/jpeg)/);
   await page.screenshot({ path: testInfo.outputPath('preview.png') });
 
@@ -99,6 +144,14 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await expect(page.locator('#statusText')).toHaveText('撮影できるよ！！！');
 
   await page.locator('#homeFromCameraButton').click();
+  await expect(page.locator('.app')).toHaveClass(/state-home/);
+  await page.locator('#photoGalleryButton').click();
+  await expect(page.locator('#photoGalleryScreen')).toBeVisible();
+  await expect(page.locator('#photoGalleryGrid .photo-gallery-card')).toHaveCount(1);
+  await expect(page.locator('#photoGalleryGrid img')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('photos.png') });
+  await page.locator('#closePhotoGalleryButton').click();
+  await expect(page.locator('#photoGalleryScreen')).toBeHidden();
   await expect(page.locator('.app')).toHaveClass(/state-home/);
 });
 
@@ -253,6 +306,13 @@ test('stored models are shown as selectable gallery cards', async ({ page }) => 
 });
 
 test('add card opens the native image picker', async ({ page }) => {
+  await page.route('**/api/models', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ models: [] }),
+    });
+  });
   await page.goto('/');
 
   const fileChooserPromise = page.waitForEvent('filechooser');

@@ -51,6 +51,23 @@ export async function listModels() {
   return payload.models || [];
 }
 
+export async function listPhotos() {
+  const payload = await request('/api/photos');
+  return payload.photos || [];
+}
+
+export async function savePhoto(image, id) {
+  const payload = await request('/api/photos', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ image, id }),
+  });
+  if (!payload.photo?.url) {
+    throw new ApiError('バックエンドから写真URLが返りませんでした。');
+  }
+  return payload.photo;
+}
+
 export async function createModelTask(image, name) {
   const task = await request('/api/models', {
     method: 'POST',

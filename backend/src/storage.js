@@ -23,6 +23,26 @@ export async function findModels() {
   return parseModels(modelBlobs);
 }
 
+export async function findPhotos() {
+  const { blobs } = await list({ prefix: 'photos/', limit: 1000 });
+
+  return blobs
+    .map((blob) => {
+      const match = blob.pathname.match(/^photos\/([^/]+)\.(jpg|png)$/);
+      if (!match) {
+        return undefined;
+      }
+
+      return {
+        id: match[1],
+        url: blob.url,
+        createdAt: new Date(blob.uploadedAt).toISOString(),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 function parseModels(blobs) {
   const models = new Map();
 

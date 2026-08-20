@@ -37,6 +37,16 @@
           <input id="modelImageInput" class="sr-only" type="file" accept="image/*" />
         </div>
         <div class="camera-start-panel">
+          <button
+            id="photoGalleryButton"
+            class="photo-gallery-button"
+            type="button"
+            aria-label="みんなの写真を見る"
+            aria-expanded="false"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
+            <span>みんなの写真</span>
+          </button>
           <button id="startButton" class="start-button" type="button" disabled>
             <span id="startButtonIcon" class="material-symbols-rounded" aria-hidden="true" hidden>photo_camera</span>
             <span id="startButtonLabel" aria-live="polite">モデル取得中...</span>
@@ -111,6 +121,17 @@
           <button id="retakeButton" class="secondary-button" type="button">再撮影</button>
           <a id="saveLink" class="save-link" download="duck-camera.jpg">保存</a>
         </div>
+      </section>
+
+      <section id="photoGalleryScreen" class="photo-gallery-screen" aria-label="みんなの写真" hidden>
+        <header class="photo-gallery-header">
+          <h1>みんなの写真</h1>
+          <button id="closePhotoGalleryButton" type="button" aria-label="写真一覧を閉じる">
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        </header>
+        <p id="photoGalleryStatus" class="photo-gallery-status" role="status"></p>
+        <div id="photoGalleryGrid" class="photo-gallery-grid"></div>
       </section>
 
       <p id="statusText" class="status-text" role="status"></p>

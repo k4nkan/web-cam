@@ -1,10 +1,17 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { createModelTask, getModelTask, listModels } from './api.js';
+import {
+  createModelTask,
+  getModelTask,
+  listModels,
+  listPhotos,
+  savePhoto as uploadPhoto,
+} from './api.js';
 import { readImageAsDataUrl } from './image-data.js';
 import { ModelGenerationQueue } from './model-generation-queue.js';
 import { createPendingTaskStore } from './pending-tasks.js';
+import { PhotoUploadQueue } from './photo-upload-queue.js';
 
 const preferredCameraWidth = 1920;
 const preferredCameraHeight = 1080;
@@ -19,6 +26,11 @@ const modelSelect = document.querySelector('#modelSelect');
 const modelGallery = document.querySelector('#modelGallery');
 const modelImageInput = document.querySelector('#modelImageInput');
 const captureButton = document.querySelector('#captureButton');
+const photoGalleryButton = document.querySelector('#photoGalleryButton');
+const photoGalleryScreen = document.querySelector('#photoGalleryScreen');
+const photoGalleryGrid = document.querySelector('#photoGalleryGrid');
+const photoGalleryStatus = document.querySelector('#photoGalleryStatus');
+const closePhotoGalleryButton = document.querySelector('#closePhotoGalleryButton');
 const switchCameraButton = document.querySelector('#switchCameraButton');
 const modelScaleRange = document.querySelector('#modelScaleRange');
 const scaleLimitButtons = document.querySelectorAll('[data-scale-limit]');
@@ -63,6 +75,7 @@ let currentFacingMode = 'environment';
 let animationFrameId;
 let capturedImageUrl;
 let capturedImageBlob;
+let capturedPhotoId;
 let lastControlTouchTime = 0;
 let selectedModelReady = false;
 let initialLoading = true;
@@ -71,6 +84,9 @@ let cameraStarting = false;
 let cameraSwitching = false;
 let captureInProgress = false;
 let captureVersion = 0;
+let photoGalleryLoadPromise;
+
+const storedPhotos = new Map();
 
 const pendingTaskStore = createPendingTaskStore();
 const modelGenerationQueue = new ModelGenerationQueue({
@@ -115,6 +131,28 @@ const modelGenerationQueue = new ModelGenerationQueue({
   },
 });
 
+const photoUploadQueue = new PhotoUploadQueue({
+  upload: uploadPhoto,
+  maxConcurrent: 2,
+  onSuccess(job, photo) {
+    upsertStoredPhoto(photo);
+    if (capturedPhotoId === job.id && app.classList.contains('state-preview')) {
+      setStatus('みんなの写真に保存したよ！！！');
+    }
+  },
+  onRetry(job, _error, retryDelay) {
+    if (capturedPhotoId === job.id && app.classList.contains('state-preview')) {
+      setStatus(`写真を保存中... ${Math.ceil(retryDelay / 1000)}秒後に再試行します。`);
+    }
+  },
+  onFailure(job, error) {
+    console.error(error);
+    if (capturedPhotoId === job.id && app.classList.contains('state-preview')) {
+      setStatus('写真の自動保存に失敗しました。もう一度撮影してください。');
+    }
+  },
+});
+
 boot();
 
 startButton.addEventListener('click', startCamera);
@@ -122,6 +160,8 @@ modelSelect.addEventListener('change', () => selectModel(modelSelect.value));
 modelGallery.addEventListener('click', selectGalleryModel);
 modelImageInput.addEventListener('change', generateFromUpload);
 captureButton.addEventListener('click', capturePhoto);
+photoGalleryButton.addEventListener('click', openPhotoGallery);
+closePhotoGalleryButton.addEventListener('click', closePhotoGallery);
 switchCameraButton.addEventListener('click', switchCamera);
 modelScaleRange.addEventListener('input', updateModelScale);
 scaleLimitButtons.forEach((button) => {
@@ -142,6 +182,11 @@ window.addEventListener('pointerup', stopModelDrag);
 window.addEventListener('pointercancel', stopModelDrag);
 document.addEventListener('touchend', preventControlDoubleTapZoom, { passive: false });
 window.addEventListener('resize', resizeThree);
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !photoGalleryScreen.hidden) {
+    closePhotoGallery();
+  }
+});
 
 function boot() {
   initThree();
@@ -706,6 +751,7 @@ function retakePhoto() {
 
 function goHome() {
   captureVersion += 1;
+  closePhotoGallery();
   clearCapturedImage();
   stopCameraStream();
   captureButton.disabled = true;
@@ -717,13 +763,16 @@ function goHome() {
 
 function setCapturedImage(imageUrl, blob) {
   clearCapturedImage();
+  const photoId = createPhotoId();
   capturedImageUrl = imageUrl;
   capturedImageBlob = blob;
+  capturedPhotoId = photoId;
   resultImage.src = imageUrl;
   saveLink.href = imageUrl;
   saveLink.download = `duck-camera-${Date.now()}.jpg`;
   setMode('preview');
-  setStatus('撮影できたよ！！！');
+  setStatus('撮影できたよ！！！ 写真を保存中...');
+  void queueCapturedPhoto(photoId, imageUrl, blob);
 }
 
 function clearCapturedImage() {
@@ -733,8 +782,97 @@ function clearCapturedImage() {
 
   capturedImageUrl = undefined;
   capturedImageBlob = undefined;
+  capturedPhotoId = undefined;
   resultImage.removeAttribute('src');
   saveLink.removeAttribute('href');
+}
+
+function createPhotoId() {
+  const randomId = globalThis.crypto?.randomUUID?.()
+    || `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+  return `${Date.now()}-${randomId}`;
+}
+
+async function queueCapturedPhoto(id, imageUrl, blob) {
+  try {
+    const image = blob ? await readImageAsDataUrl(blob) : imageUrl;
+    photoUploadQueue.enqueue({ id, image });
+  } catch (error) {
+    console.error(error);
+    if (capturedPhotoId === id && app.classList.contains('state-preview')) {
+      setStatus('写真の自動保存に失敗しました。もう一度撮影してください。');
+    }
+  }
+}
+
+function openPhotoGallery() {
+  photoGalleryScreen.hidden = false;
+  photoGalleryButton.setAttribute('aria-expanded', 'true');
+  renderPhotoGallery();
+  void refreshPhotoGallery();
+}
+
+function closePhotoGallery() {
+  photoGalleryScreen.hidden = true;
+  photoGalleryButton.setAttribute('aria-expanded', 'false');
+}
+
+async function refreshPhotoGallery() {
+  if (photoGalleryLoadPromise) {
+    return photoGalleryLoadPromise;
+  }
+
+  photoGalleryStatus.textContent = storedPhotos.size ? '' : '写真を読み込み中...';
+  const request = listPhotos();
+  photoGalleryLoadPromise = request;
+
+  try {
+    const photos = await request;
+    photos.forEach((photo) => storedPhotos.set(photo.id, photo));
+    renderPhotoGallery();
+    photoGalleryStatus.textContent = storedPhotos.size ? '' : 'まだ写真がありません。';
+  } catch (error) {
+    console.error(error);
+    photoGalleryStatus.textContent = '写真一覧を読み込めませんでした。';
+  } finally {
+    if (photoGalleryLoadPromise === request) {
+      photoGalleryLoadPromise = undefined;
+    }
+  }
+}
+
+function upsertStoredPhoto(photo) {
+  storedPhotos.set(photo.id, photo);
+  if (!photoGalleryScreen.hidden) {
+    renderPhotoGallery();
+  }
+}
+
+function renderPhotoGallery() {
+  const photos = [...storedPhotos.values()]
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const fragment = document.createDocumentFragment();
+
+  photos.forEach((photo) => {
+    const link = document.createElement('a');
+    link.className = 'photo-gallery-card';
+    link.href = photo.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.setAttribute('aria-label', '写真を大きく見る');
+
+    const image = document.createElement('img');
+    image.src = photo.url;
+    image.alt = 'みんなの写真';
+    image.loading = 'lazy';
+    link.appendChild(image);
+    fragment.appendChild(link);
+  });
+
+  photoGalleryGrid.replaceChildren(fragment);
+  if (photos.length) {
+    photoGalleryStatus.textContent = '';
+  }
 }
 
 async function generateFromUpload() {
@@ -994,6 +1132,7 @@ function finishInitialLoading() {
 
 window.addEventListener('beforeunload', () => {
   modelGenerationQueue.stop();
+  photoUploadQueue.stop();
   if (animationFrameId) {
     window.cancelAnimationFrame(animationFrameId);
   }
