@@ -134,14 +134,36 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await expect(page.locator('.app')).toHaveClass(/state-preview/);
   await expect(page.locator('#homeFromPreviewButton')).toBeVisible();
   await expect(page.locator('#generateCapturedButton')).toHaveCount(0);
+  await expect(page.locator('#photoSharePrompt')).toBeVisible();
+  await expect(page.locator('#photoSharePrompt')).toContainText('みんなの写真');
+  await expect(page.locator('#statusText')).toHaveText('撮影できたよ！！！ 公開するか選んでください。');
+  expect(photoUploads).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath('preview.png') });
+
+  await page.locator('#confirmPhotoShareButton').evaluate((button) => {
+    button.click();
+    button.click();
+    button.click();
+    button.click();
+  });
+  await expect(page.locator('#photoSharePrompt')).toBeHidden();
   await expect(page.locator('#statusText')).toHaveText('みんなの写真に保存したよ！！！');
   expect(photoUploads).toBe(1);
   await expect(page.locator('#saveLink')).toHaveAttribute('href', /^(blob:|data:image\/jpeg)/);
-  await page.screenshot({ path: testInfo.outputPath('preview.png') });
 
   await page.locator('#retakeButton').click();
   await expect(page.locator('.app')).toHaveClass(/state-camera/);
   await expect(page.locator('#statusText')).toHaveText('撮影できるよ！！！');
+
+  await page.locator('#captureButton').click();
+  await expect(page.locator('#photoSharePrompt')).toBeVisible();
+  await page.locator('#declinePhotoShareButton').click();
+  await expect(page.locator('#photoSharePrompt')).toBeHidden();
+  await expect(page.locator('#statusText')).toHaveText('この写真はみんなの写真に公開していません。');
+  expect(photoUploads).toBe(1);
+
+  await page.locator('#retakeButton').click();
+  await expect(page.locator('.app')).toHaveClass(/state-camera/);
 
   await page.locator('#homeFromCameraButton').click();
   await expect(page.locator('.app')).toHaveClass(/state-home/);

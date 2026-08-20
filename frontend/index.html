@@ -117,6 +117,15 @@
         <button id="homeFromPreviewButton" class="home-button" type="button" aria-label="トップへ戻る">
           <span class="material-symbols-rounded" aria-hidden="true">home</span>
         </button>
+        <div id="photoSharePrompt" class="photo-share-prompt" hidden>
+          <p>この写真を「みんなの写真」に公開しますか？</p>
+          <div class="photo-share-actions">
+            <button id="declinePhotoShareButton" type="button">今回はしない</button>
+            <button id="confirmPhotoShareButton" class="photo-share-confirm-button" type="button">
+              公開する
+            </button>
+          </div>
+        </div>
         <div class="preview-actions">
           <button id="retakeButton" class="secondary-button" type="button">再撮影</button>
           <a id="saveLink" class="save-link" download="duck-camera.jpg">保存</a>

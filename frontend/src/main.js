@@ -31,6 +31,9 @@ const photoGalleryScreen = document.querySelector('#photoGalleryScreen');
 const photoGalleryGrid = document.querySelector('#photoGalleryGrid');
 const photoGalleryStatus = document.querySelector('#photoGalleryStatus');
 const closePhotoGalleryButton = document.querySelector('#closePhotoGalleryButton');
+const photoSharePrompt = document.querySelector('#photoSharePrompt');
+const confirmPhotoShareButton = document.querySelector('#confirmPhotoShareButton');
+const declinePhotoShareButton = document.querySelector('#declinePhotoShareButton');
 const switchCameraButton = document.querySelector('#switchCameraButton');
 const modelScaleRange = document.querySelector('#modelScaleRange');
 const scaleLimitButtons = document.querySelectorAll('[data-scale-limit]');
@@ -85,6 +88,7 @@ let cameraSwitching = false;
 let captureInProgress = false;
 let captureVersion = 0;
 let photoGalleryLoadPromise;
+let pendingPhotoShare;
 
 const storedPhotos = new Map();
 
@@ -142,13 +146,13 @@ const photoUploadQueue = new PhotoUploadQueue({
   },
   onRetry(job, _error, retryDelay) {
     if (capturedPhotoId === job.id && app.classList.contains('state-preview')) {
-      setStatus(`写真を保存中... ${Math.ceil(retryDelay / 1000)}秒後に再試行します。`);
+      setStatus(`写真を公開中... ${Math.ceil(retryDelay / 1000)}秒後に再試行します。`);
     }
   },
   onFailure(job, error) {
     console.error(error);
     if (capturedPhotoId === job.id && app.classList.contains('state-preview')) {
-      setStatus('写真の自動保存に失敗しました。もう一度撮影してください。');
+      setStatus('写真の公開に失敗しました。もう一度撮影してください。');
     }
   },
 });
@@ -162,6 +166,8 @@ modelImageInput.addEventListener('change', generateFromUpload);
 captureButton.addEventListener('click', capturePhoto);
 photoGalleryButton.addEventListener('click', openPhotoGallery);
 closePhotoGalleryButton.addEventListener('click', closePhotoGallery);
+confirmPhotoShareButton.addEventListener('click', confirmPhotoShare);
+declinePhotoShareButton.addEventListener('click', declinePhotoShare);
 switchCameraButton.addEventListener('click', switchCamera);
 modelScaleRange.addEventListener('input', updateModelScale);
 scaleLimitButtons.forEach((button) => {
@@ -770,9 +776,10 @@ function setCapturedImage(imageUrl, blob) {
   resultImage.src = imageUrl;
   saveLink.href = imageUrl;
   saveLink.download = `duck-camera-${Date.now()}.jpg`;
+  pendingPhotoShare = { id: photoId, imageUrl, blob };
+  photoSharePrompt.hidden = false;
   setMode('preview');
-  setStatus('撮影できたよ！！！ 写真を保存中...');
-  void queueCapturedPhoto(photoId, imageUrl, blob);
+  setStatus('撮影できたよ！！！ 公開するか選んでください。');
 }
 
 function clearCapturedImage() {
@@ -783,8 +790,33 @@ function clearCapturedImage() {
   capturedImageUrl = undefined;
   capturedImageBlob = undefined;
   capturedPhotoId = undefined;
+  pendingPhotoShare = undefined;
+  photoSharePrompt.hidden = true;
   resultImage.removeAttribute('src');
   saveLink.removeAttribute('href');
+}
+
+function confirmPhotoShare() {
+  const photo = pendingPhotoShare;
+  if (!photo) {
+    return;
+  }
+
+  pendingPhotoShare = undefined;
+  photoSharePrompt.hidden = true;
+  setStatus('写真を公開中...');
+  void queueCapturedPhoto(photo.id, photo.imageUrl, photo.blob);
+}
+
+function declinePhotoShare() {
+  if (!pendingPhotoShare) {
+    return;
+  }
+
+  pendingPhotoShare = undefined;
+  capturedPhotoId = undefined;
+  photoSharePrompt.hidden = true;
+  setStatus('この写真はみんなの写真に公開していません。');
 }
 
 function createPhotoId() {
@@ -800,7 +832,7 @@ async function queueCapturedPhoto(id, imageUrl, blob) {
   } catch (error) {
     console.error(error);
     if (capturedPhotoId === id && app.classList.contains('state-preview')) {
-      setStatus('写真の自動保存に失敗しました。もう一度撮影してください。');
+      setStatus('写真の公開に失敗しました。もう一度撮影してください。');
     }
   }
 }
