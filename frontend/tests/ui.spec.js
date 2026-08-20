@@ -90,6 +90,18 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await expect(page.locator('#startButtonIcon')).toBeVisible();
   await expect(page.locator('#photoGalleryButton')).toBeVisible();
   await expect(page.locator('#photoGalleryButton')).toContainText('みんなの写真');
+  const modelPickerBox = await page.locator('.model-picker').boundingBox();
+  const modelGalleryBox = await page.locator('#modelGallery').boundingBox();
+  const modelCards = page.locator('#modelGallery .model-card');
+  const firstModelCardBox = await modelCards.first().boundingBox();
+  const lastModelCardBox = await modelCards.last().boundingBox();
+  expect(modelPickerBox.width).toBeLessThanOrEqual(420);
+  expect(
+    Math.abs(
+      (firstModelCardBox.x + lastModelCardBox.x + lastModelCardBox.width) / 2
+        - (modelGalleryBox.x + modelGalleryBox.width / 2),
+    ),
+  ).toBeLessThanOrEqual(2);
   const startBox = await page.locator('#startButton').boundingBox();
   const galleryBox = await page.locator('#photoGalleryButton').boundingBox();
   expect(galleryBox.y + galleryBox.height).toBeLessThanOrEqual(startBox.y);
@@ -291,8 +303,16 @@ test('model generation starts at most two Tripo tasks and queues the rest', asyn
   await expect.poll(() => createRequests, { timeout: 5000 }).toBe(3);
 });
 
-test('stored models are shown as selectable gallery cards', async ({ page }) => {
+test('stored models are shown as selectable gallery cards', async ({ page }, testInfo) => {
   const duckFbx = await readFile(new URL('../../backend/assets/duck.fbx', import.meta.url));
+  const previewUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="120"%3E%3Crect width="200" height="120" fill="%2390a080"/%3E%3C/svg%3E';
+  const models = ['duck', 'camera', 'person', 'box'].map((id) => ({
+    id,
+    name: id,
+    modelUrl: '/model.fbx',
+    format: 'fbx',
+    previewUrl,
+  }));
   await page.route('**/model.fbx', async (route) => {
     await route.fulfill({
       status: 200,
@@ -304,21 +324,28 @@ test('stored models are shown as selectable gallery cards', async ({ page }) => 
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        models: [
-          {
-            id: 'duck',
-            name: 'duck',
-            modelUrl: '/model.fbx',
-            format: 'fbx',
-            previewUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="120"%3E%3Crect width="200" height="120" fill="%2390a080"/%3E%3C/svg%3E',
-          },
-        ],
-      }),
+      body: JSON.stringify({ models }),
     });
   });
 
+  if (testInfo.project.name === 'desktop') {
+    await page.setViewportSize({ width: 2560, height: 1200 });
+  }
   await page.goto('/');
+
+  const galleryCards = page.locator('#modelGallery .model-card');
+  await expect(galleryCards).toHaveCount(5);
+  if (testInfo.project.name === 'desktop') {
+    const firstCardBox = await galleryCards.first().boundingBox();
+    const lastCardBox = await galleryCards.last().boundingBox();
+    const gallerySize = await page.locator('#modelGallery').evaluate((gallery) => ({
+      clientWidth: gallery.clientWidth,
+      scrollWidth: gallery.scrollWidth,
+    }));
+    expect(lastCardBox.y).toBeGreaterThan(firstCardBox.y);
+    expect(gallerySize.scrollWidth).toBeLessThanOrEqual(gallerySize.clientWidth + 1);
+    await page.screenshot({ path: testInfo.outputPath('models.png') });
+  }
 
   const card = page.locator('#modelGallery [data-model-id="duck"]');
   await expect(card).toBeVisible();
