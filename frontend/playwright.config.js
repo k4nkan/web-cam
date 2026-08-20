@@ -4,6 +4,7 @@ const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: '**/*.unit.test.js',
   outputDir: './test-results',
   timeout: 30_000,
   workers: 1,

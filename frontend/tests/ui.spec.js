@@ -24,6 +24,14 @@ test('loading screen stays isolated until the initial catalog is ready', async (
 
 test('camera UI states stay usable and screenshotable', async ({ page }, testInfo) => {
   const duckFbx = await readFile(new URL('../../backend/assets/duck.fbx', import.meta.url));
+  await page.addInitScript(() => {
+    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    window.cameraStartCalls = 0;
+    navigator.mediaDevices.getUserMedia = (...args) => {
+      window.cameraStartCalls += 1;
+      return originalGetUserMedia(...args);
+    };
+  });
   await page.route('**/api/models', async (route) => {
     await route.fulfill({
       status: 200,
@@ -49,21 +57,28 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
   await expect(page.locator('#startButtonIcon')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('home.png') });
 
-  await page.locator('#startButton').click();
+  await page.locator('#startButton').evaluate((button) => {
+    button.click();
+    button.click();
+    button.click();
+    button.click();
+  });
   await expect(page.locator('.app')).toHaveClass(/state-camera/);
+  await expect.poll(() => page.evaluate(() => window.cameraStartCalls)).toBe(1);
   await expect(page.locator('#statusText')).toHaveText('撮影できるよ！！！');
   await expect(page.locator('#captureButton')).toBeEnabled();
   await expect(page.locator('#switchCameraButton')).toBeEnabled();
   await expect(page.locator('#homeFromCameraButton')).toBeVisible();
   await expect(page.locator('.three-layer canvas')).toBeVisible();
+  await expect(page.locator('.scale-control button')).toHaveCount(2);
+  await expect(page.locator('#modelScaleRange')).toBeEnabled();
 
   await page.locator('[data-move="right"]').click({ clickCount: 4, delay: 40 });
   await page.locator('[data-move="up"]').click({ clickCount: 4, delay: 40 });
-  await page.locator('#modelScaleRange').evaluate((range) => {
-    range.value = range.max;
-    range.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  await page.locator('[data-scale-limit="max"]').click({ clickCount: 6, delay: 20 });
   await expect(page.locator('#modelScaleRange')).toHaveValue('1.8');
+  await page.locator('[data-scale-limit="min"]').click({ clickCount: 6, delay: 20 });
+  await expect(page.locator('#modelScaleRange')).toHaveValue('0.5');
   await expect(page.locator('.three-layer canvas')).toBeVisible();
 
   const zoomScale = await page.evaluate(() => window.visualViewport?.scale ?? 1);
@@ -88,8 +103,10 @@ test('camera UI states stay usable and screenshotable', async ({ page }, testInf
 });
 
 test('model generation returns to the model picker while pending', async ({ page }) => {
+  const sourceWebp = await readFile(new URL('../public/images/tobisuke.webp', import.meta.url));
   await page.route('**/api/models', async (route) => {
     if (route.request().method() === 'POST') {
+      expect(route.request().postDataJSON().image).toMatch(/^data:image\/jpeg;base64,/);
       await route.fulfill({
         status: 202,
         contentType: 'application/json',
@@ -120,9 +137,9 @@ test('model generation returns to the model picker while pending', async ({ page
   await page.locator('[data-action="add-model"]').click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles({
-    name: 'sample.jpg',
-    mimeType: 'image/jpeg',
-    buffer: Buffer.from('sample image'),
+    name: 'sample.webp',
+    mimeType: 'image/webp',
+    buffer: sourceWebp,
   });
 
   await expect(page.locator('.app')).toHaveClass(/state-home/);
@@ -132,6 +149,71 @@ test('model generation returns to the model picker while pending', async ({ page
   await expect(page.locator('#modelSelect option[value="task-pending-1"]')).toContainText('生成中');
   await expect(page.locator('#modelGallery [data-model-id="task-pending-1"]')).toContainText('作成中... 12%');
   await expect(page.locator('[data-action="add-model"]')).toBeVisible();
+});
+
+test('model generation starts at most two Tripo tasks and queues the rest', async ({ page }) => {
+  let createRequests = 0;
+  let releaseFirstTask = false;
+
+  await page.route('**/api/models', async (route) => {
+    if (route.request().method() === 'POST') {
+      createRequests += 1;
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          taskId: `task-${createRequests}`,
+          status: 'queued',
+          progress: 0,
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ models: [] }),
+    });
+  });
+  await page.route('**/api/task*', async (route) => {
+    const taskId = new URL(route.request().url()).searchParams.get('taskId');
+    const expired = taskId === 'task-1' && releaseFirstTask;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        taskId,
+        status: expired ? 'expired' : 'running',
+        progress: 12,
+        error: expired ? 'test expired' : undefined,
+      }),
+    });
+  });
+
+  await page.goto('/');
+
+  async function upload(name) {
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.locator('[data-action="add-model"]').click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles({
+      name,
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from(name),
+    });
+  }
+
+  await upload('one.jpg');
+  await upload('two.jpg');
+  await expect.poll(() => createRequests).toBe(2);
+
+  await upload('three.jpg');
+  await page.waitForTimeout(100);
+  expect(createRequests).toBe(2);
+
+  releaseFirstTask = true;
+  await expect.poll(() => createRequests, { timeout: 5000 }).toBe(3);
 });
 
 test('stored models are shown as selectable gallery cards', async ({ page }) => {

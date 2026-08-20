@@ -11,6 +11,7 @@ export async function saveBlob(pathname, body, contentType) {
     {
       access: 'public',
       addRandomSuffix: false,
+      allowOverwrite: true,
       contentType,
     },
   );
@@ -19,9 +20,13 @@ export async function saveBlob(pathname, body, contentType) {
 export async function findModels() {
   const { blobs } = await list({ prefix: 'models/', limit: 1000 });
   const modelBlobs = await ensureDefaultDuck(blobs);
+  return parseModels(modelBlobs);
+}
+
+function parseModels(blobs) {
   const models = new Map();
 
-  for (const blob of modelBlobs) {
+  for (const blob of blobs) {
     const match = blob.pathname.match(/^models\/([^/]+)\/(model\.(glb|fbx)|preview\.[^/]+)$/);
     if (!match) {
       continue;
@@ -67,5 +72,6 @@ async function ensureDefaultDuck(blobs) {
 }
 
 export async function findModel(id) {
-  return (await findModels()).find((model) => model.id === id);
+  const { blobs } = await list({ prefix: `models/${id}/`, limit: 10 });
+  return parseModels(blobs).find((model) => model.id === id);
 }

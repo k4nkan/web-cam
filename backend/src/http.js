@@ -1,7 +1,11 @@
-const maxBodyBytes = 8 * 1024 * 1024;
+const maxBodyBytes = 4_400_000;
 
-export function setCors(response) {
-  response.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_ORIGIN || '*');
+export function setCors(request, response) {
+  const allowedOrigin = process.env.FRONTEND_ORIGIN;
+  if (allowedOrigin && request.headers?.origin === allowedOrigin) {
+    response.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    response.setHeader('Vary', 'Origin');
+  }
   response.setHeader('Access-Control-Allow-Headers', 'content-type');
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
@@ -14,7 +18,14 @@ export function sendJson(response, status, payload) {
 
 export function sendError(response, error) {
   const status = error.status || 500;
-  console.error(error);
+  if (error.retryAfter !== undefined) {
+    response.setHeader('retry-after', String(error.retryAfter));
+  }
+  console.error({
+    message: error.message,
+    status,
+    traceId: error.traceId,
+  });
   sendJson(response, status, { error: error.message || 'Internal server error' });
 }
 

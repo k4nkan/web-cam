@@ -57,7 +57,14 @@
           <span class="material-symbols-rounded" aria-hidden="true">camera</span>
         </button>
         <div class="scale-control" aria-label="model size controls">
-          <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          <button
+            class="scale-limit-button"
+            type="button"
+            data-scale-limit="max"
+            aria-label="モデルを最大サイズにする"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          </button>
           <input
             id="modelScaleRange"
             class="model-scale-range"
@@ -68,7 +75,14 @@
             value="1"
             aria-label="モデルサイズ"
           />
-          <span class="material-symbols-rounded" aria-hidden="true">remove</span>
+          <button
+            class="scale-limit-button"
+            type="button"
+            data-scale-limit="min"
+            aria-label="モデルを最小サイズにする"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">remove</span>
+          </button>
         </div>
         <div class="model-controls" aria-label="model controls">
           <div class="move-pad">

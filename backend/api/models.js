@@ -2,7 +2,7 @@ import { readJson, sendError, sendJson, setCors } from '../src/http.js';
 import { createModelTask, listStoredModels } from '../src/models.js';
 
 export default async function handler(request, response) {
-  setCors(response);
+  setCors(request, response);
   if (request.method === 'OPTIONS') {
     response.status(204).end();
     return;
@@ -20,6 +20,10 @@ export default async function handler(request, response) {
     }
 
     const body = await readJson(request);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      sendJson(response, 400, { error: 'JSON object is required' });
+      return;
+    }
     sendJson(response, 202, await createModelTask(body.image, body.name));
   } catch (error) {
     sendError(response, error);
